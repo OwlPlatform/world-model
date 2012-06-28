@@ -1,0 +1,24 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+#vim Swap files
+*.swp
+
+#Files that cmake generates
+CMakeCache.txt
+CMakeFiles/
+Makefile
+Misc/*.conf
+cmake_install.cmake
+install_manifest.txt
+
