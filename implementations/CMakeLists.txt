@@ -7,6 +7,6 @@ SET(MysqlSourceFiles
   mysql_world_model.cpp
 )
 
-add_library (sqlite3wm SHARED ${Sqlite3SourceFiles})
-add_library (mysqlwm SHARED ${MysqlSourceFiles})
+add_library (sqlite3wm STATIC ${Sqlite3SourceFiles})
+add_library (mysqlwm STATIC ${MysqlSourceFiles})
 
