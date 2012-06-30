@@ -1,0 +1,11 @@
+Installation Instructions
+*************************
+
+Run the following commands to build the world model server libraries
+and several implementations and install them in lib and bin directories:
+cmake .
+make
+make install
+
+To configure variables used by cmake, such as your lib directory,
+run `cmake --help` to find the appropriate command line parameters.

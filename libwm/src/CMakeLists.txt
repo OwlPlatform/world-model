@@ -1,0 +1,11 @@
+SET(SourceFiles
+  standing_query.cpp
+  semaphore.cpp
+)
+
+add_library (owlwm SHARED ${SourceFiles})
+set (FULLVERSION ${LibOwlWM_VERSION_MAJOR}.${LibOwlWM_VERSION_MINOR}.${LibOwlWM_VERSION_REVISION})
+SET_TARGET_PROPERTIES(owlwm PROPERTIES VERSION ${FULLVERSION} SOVERSION ${FULLVERSION})
+
+SET(CMAKE_INSTALL_LIBDIR lib${LIB_SUFFIX} CACHE PATH "Output directory for libraries")
+INSTALL(TARGETS owlwm DESTINATION ${CMAKE_INSTALL_LIBDIR})
