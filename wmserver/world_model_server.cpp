@@ -564,7 +564,7 @@ class ClientConnection : public ThreadConnection {
               vector<AliasedWorldData> aws = updateStreamRequest(rs);
               for (auto aw = aws.begin(); aw != aws.end(); ++aw) {
                 //Too noisy to print this out.
-                //debug<<"Sending updated stream data\n";
+                //std::cerr<<"Sending updated stream data\n";
                 try {
                   std::unique_lock<std::mutex> tx_lock(tx_mutex);
                   send(client::makeDataMessage(*aw, ticket));

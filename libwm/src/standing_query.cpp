@@ -110,6 +110,15 @@ bool StandingQuery::interestingOrigin(std::u16string& origin) {
   std::set<std::u16string> attrs;
   {
     std::unique_lock<std::mutex> lck(origin_attr_mutex);
+    //If this wasn't entered into the list then it must be checked
+    //This could happen for historic data in the world model for
+    //origins that were not connected to the world model since it
+    //was started. Since these will not be sending active updates
+    //going through the origin tagging process here is probably not
+    //worth it so just check the attributes.
+    if (origin_attributes.end() == origin_attributes.find(origin)) {
+      return true;
+    }
     attrs = origin_attributes[origin];
   }
   //Return true if any attributes are of interest
