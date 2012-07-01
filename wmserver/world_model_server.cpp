@@ -221,22 +221,26 @@ class ClientConnection : public ThreadConnection {
               }
               vector<AliasedWorldData> aws = updateStreamRequest(*sr);
               for (auto aw = aws.begin(); aw != aws.end(); ++aw) {
-                try {
-                  std::unique_lock<std::mutex> tx_lock(tx_mutex);
-                  send(client::makeDataMessage(*aw, sr->ticket_number));
-                } catch (std::runtime_error& err) {
-                  //If this is temporary then just wait a small amount (100 milliseconds)
-                  if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                    std::cerr<<"Socket temporarily not available handling stream request, 100 microseconds seconds.\n";
-                    usleep(100);
+                //Don't bother sending a message if there aren't any updated
+                //attributes.
+                if (not aw->attributes.empty()) {
+                  try {
+                    std::unique_lock<std::mutex> tx_lock(tx_mutex);
+                    send(client::makeDataMessage(*aw, sr->ticket_number));
+                  } catch (std::runtime_error& err) {
+                    //If this is temporary then just wait a small amount (100 milliseconds)
+                    if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
+                      std::cerr<<"Socket temporarily not available handling stream request, 100 microseconds seconds.\n";
+                      usleep(100);
+                    }
+                    //Otherwise rethrow the error
+                    else {
+                      throw err;
+                    }
                   }
-                  //Otherwise rethrow the error
-                  else {
-                    throw err;
-                  }
+                  //Delay a small amount between messages to avoid filling the network buffer.
+                  usleep(10);
                 }
-                //Delay a small amount between messages to avoid filling the network buffer.
-                usleep(10);
               }
             }
             //Remember when this should be serviced
