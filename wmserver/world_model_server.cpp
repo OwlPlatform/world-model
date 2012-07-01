@@ -626,12 +626,12 @@ class ClientConnection : public ThreadConnection {
               }
             }
           }
-        }
-        //Send a keep alive message if the connection has been idle
-        //for half of the time out time.
-        if (time(NULL) - lastActive() > timeout / 2.0) {
-          std::unique_lock<std::mutex> tx_lock(tx_mutex);
-          send(client::makeKeepAlive());
+          //Send a keep alive message if the connection has been idle
+          //for half of the time out time.
+          if (time(NULL) - lastActive() > timeout / 2.0) {
+            std::unique_lock<std::mutex> tx_lock(tx_mutex);
+            send(client::makeKeepAlive());
+          }
         }
       } catch (std::exception& err) {
         std::cerr<<"Solver thread error: "<<err.what()<<'\n';
@@ -724,6 +724,7 @@ class SolverConnection : public ThreadConnection {
             debug<<"Message id is "<<(uint32_t)raw_message[4]<<'\n';
 
             if ( solver::MessageID::keep_alive == message_type ) {
+              std::cerr<<"Received keep alive from origin "<<std::string(origin.begin(), origin.end())<<'\n';
               setActive();
             }
             else if ( solver::MessageID::type_announce == message_type ) {
