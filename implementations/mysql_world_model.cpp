@@ -1484,7 +1484,9 @@ QueryAccessor MysqlWorldModel::requestStandingQuery(const world_model::URI& uri,
   //Populate the query
   //Flag the access control so that this read does not conflict with a write.
   SemaphoreFlag flag(access_control);
-  world_state ws = standing_queries.front().showInterested(cur_state);
+  //Indicate that multiple origins are used when checking interest so that
+  //the standing query does not try to optimize the check based upon origins.
+  world_state ws = standing_queries.front().showInterested(cur_state, true);
   standing_queries.front().insertData(ws);
   return QueryAccessor(&standing_queries, &sq_mutex, standing_queries.begin());
 }

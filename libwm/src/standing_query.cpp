@@ -161,12 +161,12 @@ bool StandingQuery::interestingOrigin(std::u16string& origin) {
 }
 
 ///Return a subset of the world state that this query is interested in.
-StandingQuery::world_state StandingQuery::showInterested(world_state& ws) {
-  //TODO FIXME Assuming that every value in this state comes from the same origin.
+StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool multiple_origins) {
+  //Optimize the search if every value in this state comes from the same origin.
   //If this origin is not interesting then don't bother checking its data.
   //This is to avoid checking large numbers of attributes against the uri
   //and attribute regular expressions when this world state contains many entries.
-  if (attr_regex.size() < ws.size()) {
+  if (not multiple_origins and attr_regex.size() < ws.size()) {
     //Assume here that the world state does not have any empty vectors
     try {
       if (not interestingOrigin(ws.begin()->second.at(0).origin)) {
@@ -177,6 +177,7 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws) {
     catch (std::exception& e) {
     }
     //Just match normally, don't waste time trying to find IDs with attributes
+    //if some of them do not have any attributes
   }
 
   std::vector<world_model::URI> matches;

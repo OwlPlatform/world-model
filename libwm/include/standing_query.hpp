@@ -110,9 +110,12 @@ class StandingQuery {
     /**
      * Return a subset of the world state that this query is interested in.
      * Also remember partial matches so that later calls to showInterested
-     * do not need to provide the entire world state.
+     * do not need to provide the entire world state. This call can
+     * quickly check if any data is interesting by seeing if the origin
+     * itself is interesting, but will skip this if the world state
+     * contains data from multiple origins.
      */
-    world_state showInterested(world_state& ws);
+    world_state showInterested(world_state& ws, bool multiple_origins = false);
 
     /**
      * Return a subset of the world state that would be modified if the
