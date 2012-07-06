@@ -45,13 +45,15 @@ StandingQuery::StandingQuery(const world_model::URI& uri, const std::vector<std:
     bool get_data) : uri_pattern(uri), desired_attributes(desired_attributes), get_data(get_data) {
   //Set this to true only after all regex patterns have compiled
   regex_valid = false;
-  int err = regcomp(&uri_regex, std::string(uri_pattern.begin(), uri_pattern.end()).c_str(), REG_EXTENDED);
+  std::string u8_pattern(uri_pattern.begin(), uri_pattern.end());
+  int err = regcomp(&uri_regex, u8_pattern.c_str(), REG_EXTENDED);
   if (0 != err) {
     return;
   }
   for (auto I = desired_attributes.begin(); I != desired_attributes.end(); ++I) {
     regex_t re;
-    int err = regcomp(&re, std::string(I->begin(), I->end()).c_str(), REG_EXTENDED);
+    std::string u8_attr_pattern(I->begin(), I->end());
+    int err = regcomp(&re, u8_attr_pattern.c_str(), REG_EXTENDED);
     if (0 != err) {
       regfree(&uri_regex);
       for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
@@ -191,7 +193,8 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws) {
     //Do a regex and update uri_accepted if no cached result was found
     else {
       regmatch_t pmatch;
-      int match = regexec(&uri_regex, std::string(I->first.begin(), I->first.end()).c_str(), 1, &pmatch, 0);
+      std::string search_id(I->first.begin(), I->first.end());
+      int match = regexec(&uri_regex, search_id.c_str(), 1, &pmatch, 0);
       if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
         uri_accepted[I->first] = true;
         matches.push_back(I->first);
