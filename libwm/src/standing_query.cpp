@@ -336,6 +336,9 @@ StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& w
   //Check directly if attribute was requested
   world_state result;
   for (auto uri_match = matches.begin(); uri_match != matches.end(); ++uri_match) {
+    //TODO FIXME For transient attributes do not use the uri_partial structure
+    //since transient values should not be stored. This also means that the
+    //cached uri_matches map should not store matches to transient attributes either.
     std::vector<world_model::Attribute>& uri_partial = partial[*uri_match];
     //Make a vector of attributes to search through
     std::vector<world_model::Attribute> attributes = ws[*uri_match];
