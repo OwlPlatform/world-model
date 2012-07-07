@@ -689,7 +689,10 @@ bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::ve
   std::map<URI, std::vector<world_model::Attribute>> transients;
   {
     std::unique_lock<std::mutex> lck(transient_lock);
-    for (auto I = new_data.begin(); I != new_data.end(); ++I) {
+    //Loop through the new data and remove transient attributes from new_data.
+    //If all of a URI's updated attributes are transient then remove that URI as well
+    auto I = new_data.begin();
+    while (I != new_data.end()) {
 
       world_model::URI& uri = I->first;
       std::vector<world_model::Attribute>& entries = I->second;
@@ -707,6 +710,14 @@ bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::ve
         else {
           ++entry;
         }
+      }
+      //If all of this URI's attributes were transient then remove it from the vector
+      if (I->second.empty()) {
+        I = new_data.erase(I);
+      }
+      //Otherwise go to the next entry leaving this one in place
+      else {
+        ++I;
       }
     }
   }
