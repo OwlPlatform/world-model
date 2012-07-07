@@ -118,6 +118,16 @@ class StandingQuery {
     world_state showInterested(world_state& ws, bool multiple_origins = false);
 
     /**
+     * Return a subset of the world state that this query is interested in.
+     * This is similar to showInterested but enforced exact string matches
+     * for transient names and does not store transients as partial results.
+     * This call can * quickly check if any data is interesting by seeing if
+     * the origin itself is interesting, but will skip this if the world state
+     * contains data from multiple origins.
+     */
+    world_state showInterestedTransient(world_state& ws, bool multiple_origins = false);
+
+    /**
      * Return a subset of the world state that would be modified if the
      * supplied URI is expired or deleted.
      */

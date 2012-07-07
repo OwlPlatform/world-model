@@ -235,7 +235,7 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
           if (0 == match and 0 == pmatch.rm_so and name_str.size() == pmatch.rm_eo) {
             //Remember that this attribute was matched
             patt_match.insert(search_ind);
-            //Also add this match to the URI itself
+            //Remember that this index was matched
             uri_matches[*uri_match].insert(search_ind);
           }
         }
@@ -266,6 +266,116 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
       }
     }
     //See if we matched all attributes
+    if (uri_matches[*uri_match].size() == desired_attributes.size()) {
+      //If any attributes matched and this is the first time this URI matched all
+      //desired attributes then send all attributes stored in partial (which also
+      //has the new matches).
+      //Otherwise just send the new matches.
+      if (desired_attributes.size() == prev_match_count) {
+        result[*uri_match] = uri_attributes;
+      }
+      else {
+        result[*uri_match] = uri_partial;
+      }
+    }
+  }
+  return result;
+}
+
+StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& ws, bool multiple_origins) {
+  //Optimize the search if every value in this state comes from the same origin.
+  //If this origin is not interesting then don't bother checking its data.
+  //This is to avoid checking large numbers of attributes against the uri
+  //and attribute regular expressions when this world state contains many entries.
+  if (not multiple_origins and attr_regex.size() < ws.size()) {
+    //Assume here that the world state does not have any empty vectors
+    try {
+      if (not interestingOrigin(ws.begin()->second.at(0).origin)) {
+        return StandingQuery::world_state();
+      }
+    }
+    //Catch an out of range exception from at()
+    catch (std::exception& e) {
+    }
+    //Just match normally, don't waste time trying to find IDs with attributes
+    //if some of them do not have any attributes
+  }
+
+  std::vector<world_model::URI> matches;
+  //Find matching URIs and remember if they match after
+  //doing regexp searches.
+  for (auto I = ws.begin(); I != ws.end(); ++I) {
+    //First check the cached results
+    auto uriI = uri_accepted.find(I->first);
+    if (uriI != uri_accepted.end()) {
+      if (uriI->second) {
+        matches.push_back(I->first);
+      }
+    }
+    //Do a regex and update uri_accepted if no cached result was found
+    else {
+      regmatch_t pmatch;
+      std::string search_id(I->first.begin(), I->first.end());
+      int match = regexec(&uri_regex, search_id.c_str(), 1, &pmatch, 0);
+      if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
+        uri_accepted[I->first] = true;
+        matches.push_back(I->first);
+        //Start off with no matching attributes
+        uri_matches[I->first] = std::set<size_t>();
+      }
+      else {
+        uri_accepted[I->first] = false;
+      }
+    }
+  }
+
+  //Now find the attributes of interest for each URI
+  //Attribute searches have AND relationships - this URI's results are only
+  //matched if all of the attribute search patterns have matches.
+  //We don't cache transient matches since they are direct string comparisons
+  //Check directly if attribute was requested
+  world_state result;
+  for (auto uri_match = matches.begin(); uri_match != matches.end(); ++uri_match) {
+    std::vector<world_model::Attribute>& uri_partial = partial[*uri_match];
+    //Make a vector of attributes to search through
+    std::vector<world_model::Attribute> attributes = ws[*uri_match];
+    //Make a place to put results for this uri
+    std::vector<world_model::Attribute> uri_attributes;
+    //Fill in the attribute_accepted map for any unknown attributes
+    size_t prev_match_count = uri_matches[*uri_match].size();
+    for (auto I = attributes.begin(); I != attributes.end(); ++I) {
+      //Use direct string comparison for transients. Don't use the cached
+      //map since that just using string comparison again
+      std::set<size_t> patt_match;
+      std::string name_str = std::string(I->name.begin(), I->name.end());
+      for (size_t search_ind = 0; search_ind < desired_attributes.size(); ++search_ind) {
+        if (I->name == desired_attributes[search_ind]) {
+          //Remember that this attribute was matched
+          patt_match.insert(search_ind);
+          //Remember that this search index was matched for this URI
+          uri_matches[*uri_match].insert(search_ind);
+        }
+      }
+      //Now remember which desired attributes this pattern matched.
+      attribute_accepted[I->name] = patt_match;
+
+      //Store this if any attributes matched
+      if (not attribute_accepted[I->name].empty()) {
+        //Add the attribute to the list of accepted attributes for this insert
+        uri_attributes.push_back(*I);
+        auto same_attr = std::find_if(uri_partial.begin(), uri_partial.end(), [&](world_model::Attribute& wma) {
+            return wma.name == I->name and wma.origin == I->origin;});
+        //Update the attribute
+        if (same_attr != uri_partial.end()) {
+          *same_attr = *I;
+        }
+        //Or insert the attribute as a new value
+        else {
+          uri_partial.push_back(*I);
+        }
+      }
+    }
+    //See if we matched all attributes for any URIs
     if (uri_matches[*uri_match].size() == desired_attributes.size()) {
       //If any attributes matched and this is the first time this URI matched all
       //desired attributes then send all attributes stored in partial (which also

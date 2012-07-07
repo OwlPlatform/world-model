@@ -565,12 +565,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
   //time_start = world_model::getGRAILTime();
 
   //Now service standing queries with anything that has updated the
-  //current state of the world model. Re-insert additions to the
-  //transient values here.
-  for (auto I = transients.begin(); I != transients.end(); ++I) {
-    std::vector<world_model::Attribute>& attrs = current_update[I->first];
-    attrs.insert(attrs.end(), I->second.begin(), I->second.end());
-  }
+  //current state of the world model.
   //Lock the standing queries so they don't get deleted while we insert data
   std::unique_lock<std::mutex> lck(sq_mutex);
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
@@ -581,8 +576,14 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
     //Insert the data.
     if (not ws.empty()) {
       std::cerr<<"Inserting "<<ws.size()<<" entries for the standing query.\n";
+      sq->insertData(ws);
     }
-    sq->insertData(ws);
+    //Insert transients separately from normal data to enfore exact string matching
+    ws = sq->showInterestedTransient(transients);
+    if (not ws.empty()) {
+      std::cerr<<"Inserting "<<ws.size()<<" transient entries for the standing query.\n";
+      sq->insertData(ws);
+    }
   }
   //time_diff = world_model::getGRAILTime() - time_start;
   //std::cerr<<"Standing query insertion time was "<<time_diff<<'\n';
