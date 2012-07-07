@@ -28,6 +28,7 @@ include_directories ("${OwlWM_SOURCE_DIR}/implementations")
 add_subdirectory (libwm)
 add_subdirectory (implementations)
 add_subdirectory (wmserver bin)
+add_subdirectory (tests/src tests/bin)
 
 #Set the correct library directory suffix
 if(NOT DEFINED LIB_SUFFIX)
