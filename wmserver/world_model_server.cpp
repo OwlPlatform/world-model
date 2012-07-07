@@ -28,11 +28,8 @@
  * @author Bernhard Firner
  ******************************************************************************/
 
-//For database access
+//For access control
 #include <mutex>
-#ifndef USE_MYSQL
-#include <sqlite3.h>
-#endif
 
 //For a multithreaded network server
 #include <owl/netbuffer.hpp>
@@ -54,12 +51,16 @@
 //Handle interrupt signals to exit cleanly.
 #include <signal.h>
 
+//Sleep commands
 #include <time.h>
 #include <unistd.h>
 
+//World model behavior
 #include <world_model.hpp>
 
+//For database access
 #ifndef USE_MYSQL
+#include <sqlite3.h>
 #include <sqlite3_world_model.hpp>
 #else
 #include <mysql_world_model.hpp>
