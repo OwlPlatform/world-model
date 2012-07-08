@@ -1,0 +1,23 @@
+DROP PROCEDURE IF EXISTS searchUri;
+DELIMITER //
+CREATE PROCEDURE searchUri(regex VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
+READS SQL DATA
+BEGIN
+  DECLARE searchVal VARCHAR(170) CHARACTER SET utf16;
+  /*
+    Prepare the search parameters, replacing NULL values with an 'any-string' regex.
+  */
+  -- URI
+  SET searchVal = IFNULL(regex, '.*');
+
+  -- Make the query
+  SELECT 
+          u.uriName AS uri
+    FROM 
+          Uris u
+    WHERE 
+          u.uriName REGEXP searchVal COLLATE utf16_unicode_ci;
+END
+//
+DELIMITER ;
+

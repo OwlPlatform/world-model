@@ -1,0 +1,41 @@
+DROP PROCEDURE IF EXISTS getCurrentValue;
+DELIMITER //
+CREATE PROCEDURE getCurrentValue(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
+                                 attribute VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
+                                 origin VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
+READS SQL DATA
+BEGIN
+
+  DECLARE searchUri VARCHAR(170) CHARACTER SET utf16;
+  DECLARE searchAttr VARCHAR(170) CHARACTER SET utf16;
+  DECLARE searchOrig VARCHAR(170) CHARACTER SET utf16;
+
+  /*
+    Prepare the search parameters, replacing NULL values with an 'any-string' regex.
+  */
+  -- URI
+  SET searchUri = IFNULL(uri, '.*');
+
+  -- Attribute name
+  SET searchAttr = IFNULL(attribute, '.*');
+
+  -- Origin string
+  SET searchOrig = IFNULL(origin, '.*');
+
+  -- Make the query
+  SELECT 
+         u.uriName AS uri, a.attributeName AS attribute, o.originName AS origin, 
+         av.data, av.createTimestamp AS created, av.expireTimestamp AS expires 
+    FROM 
+          Uris u, Attributes a, Origins o, AttributeValues av 
+    WHERE 
+          av.idUri=u.idUri AND 
+          av.idAttribute=a.idAttribute AND
+          av.idOrigin=o.idOrigin AND 
+          u.uriName REGEXP searchUri COLLATE utf16_unicode_ci AND 
+          a.attributeName REGEXP searchAttr COLLATE utf16_unicode_ci AND 
+          o.originName REGEXP searchOrig COLLATE utf16_unicode_ci AND 
+          av.expireTimestamp=0;
+END
+//
+DELIMITER ;

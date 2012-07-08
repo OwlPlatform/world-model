@@ -1,0 +1,67 @@
+DROP PROCEDURE IF EXISTS updateAttribute;
+DELIMITER //
+CREATE PROCEDURE updateAttribute(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci, 
+                                 attribute VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci, 
+                                 origin VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci, 
+                                 data MEDIUMBLOB,
+                                 createTimestamp BIGINT)
+MODIFIES SQL DATA
+BEGIN
+
+  -- Variables
+  DECLARE idInsert BIGINT;
+  DECLARE lcl_idUri INTEGER;
+  DECLARE lcl_idAttribute INTEGER;
+  DECLARE lcl_idOrigin INTEGER;
+  DECLARE idPrevValue BIGINT;
+  DECLARE nextTimestamp BIGINT;
+  
+  /*
+    Be sure that our arguments are already defined
+  */
+  -- URI
+  SELECT idUri INTO lcl_idUri FROM Uris WHERE uriName=uri COLLATE utf16_unicode_ci;
+  IF lcl_idUri IS NULL THEN
+    INSERT INTO Uris (uriName) VALUES (uri);
+    SELECT LAST_INSERT_ID() INTO lcl_idUri;
+  END IF;
+
+  -- Attribute
+  SELECT idAttribute INTO lcl_idAttribute FROM Attributes WHERE attributeName=attribute COLLATE utf16_unicode_ci;
+  IF lcl_idAttribute IS NULL THEN
+    INSERT INTO Attributes (attributeName) VALUES (attribute);
+    SELECT LAST_INSERT_ID() INTO lcl_idAttribute;
+  END IF;
+
+  -- Originid
+  SELECT idOrigin INTO lcl_idOrigin FROM Origins WHERE originName=origin COLLATE utf16_unicode_ci;
+  IF lcl_idOrigin IS NULL THEN
+    INSERT INTO Origins (originName) VALUES (origin);
+    SELECT LAST_INSERT_ID() INTO lcl_idOrigin;
+  END IF;
+
+  -- Check for previous value, and set its expiration timestamp
+  CALL getIdValueBefore(uri, attribute, origin, createTimestamp, idPrevValue);
+
+
+  IF idPrevValue IS NOT NULL THEN
+    UPDATE AttributeValues SET expireTimestamp=createTimestamp WHERE idValue=idPrevValue;
+  END IF;
+
+  -- Check for a value after this one, and set this one's expiration timestamp if it exists.
+  CALL getTimestampAfter(uri, attribute, origin, createTimestamp, nextTimestamp);
+
+  -- Now insert into the attribute values table
+  INSERT INTO AttributeValues (idUri, idAttribute, idOrigin, data, createTimestamp) 
+    VALUES (lcl_idUri, lcl_idAttribute, lcl_idOrigin, data, createTimestamp);
+
+  -- Update expiration timestamp if necessary
+  IF nextTimestamp IS NOT NULL THEN
+    SELECT LAST_INSERT_ID() INTO idInsert;
+    UPDATE AttributeValues SET expireTimestamp=nextTimestamp WHERE idValue=idInsert;
+  END IF;
+
+END
+//
+DELIMITER ;
+

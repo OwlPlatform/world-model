@@ -1,0 +1,22 @@
+DROP PROCEDURE IF EXISTS searchOrigin;
+DELIMITER //
+CREATE PROCEDURE searchOrigin(regex VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
+BEGIN
+  DECLARE searchVal VARCHAR(170) CHARACTER SET utf16;
+  /*
+    Prepare the search parameters, replacing NULL values with an 'any-string' regex.
+  */
+  -- URI
+  SET searchVal = IFNULL(regex, '.*');
+
+  -- Make the query
+  SELECT 
+          o.originName as origin
+    FROM 
+          Origins o
+    WHERE 
+          o.originName REGEXP searchVal COLLATE utf16_unicode_ci;
+END
+//
+DELIMITER ;
+

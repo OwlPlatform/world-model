@@ -1,0 +1,26 @@
+/*
+ Expires all Attribute values for a URI from a specific Origin.
+ If there is not an exact match on URI/Origin, no changes are made.
+ Note that regular expressions are NOT supported in this procedure.
+
+ Changes:
+ 2012/06/13 - Removing pOrigin argument -BFF
+ 2012/05/21 - Initial version. -RM
+*/
+DROP PROCEDURE IF EXISTS expireUri;
+DELIMITER //
+CREATE PROCEDURE expireUri(pUri VARCHAR(170) CHARACTER SET UTF16 COLLATE utf16_unicode_ci,
+                           pTimestamp BIGINT)
+MODIFIES SQL DATA
+BEGIN
+
+  UPDATE AttributeValues av, Origins o, Uris u SET
+    expireTimestamp=pTimestamp WHERE
+    u.uriName = pUri AND
+    av.idUri = u.idUri AND
+    av.idOrigin = o.idOrigin AND
+    av.expireTimestamp = 0;
+END
+//
+DELIMITER ;
+

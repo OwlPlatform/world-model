@@ -1,0 +1,27 @@
+DROP PROCEDURE IF EXISTS getCurrentValueId;
+DELIMITER //
+CREATE PROCEDURE getCurrentValueId(
+  IN uri VARCHAR(170) CHARACTER SET utf16,
+  IN attribute VARCHAR(170) CHARACTER SET utf16,
+  IN origin VARCHAR(170) CHARACTER SET utf16,
+  OUT id BIGINT)
+READS SQL DATA
+BEGIN
+
+  SELECT 
+         av.idValue INTO id 
+    FROM 
+          Uris u, Attributes a, Origins o, AttributeValues av 
+    WHERE 
+          av.idUri=u.idUri AND 
+          av.idAttribute=a.idAttribute AND
+          av.idOrigin=o.idOrigin AND 
+          u.uriName=uri COLLATE utf16_unicode_ci AND 
+          a.attributeName=attribute COLLATE utf16_unicode_ci AND 
+          o.originName=origin COLLATE utf16_unicode_ci AND 
+          av.expireTimestamp=0
+    ORDER BY av.createTimestamp DESC LIMIT 1;
+
+END
+//
+DELIMITER ;

@@ -1,0 +1,31 @@
+-- Returns the timestamp of the same Uri/Attribute/Origin
+-- of the entry that occurs directly after
+
+DROP PROCEDURE IF EXISTS getTimestampAfter;
+DELIMITER //
+CREATE PROCEDURE getTimestampAfter(
+  IN uri VARCHAR(170) CHARACTER SET utf16,
+  IN attribute VARCHAR(170) CHARACTER SET utf16,
+  IN origin VARCHAR(170) CHARACTER SET utf16,
+  IN oldestCreate BIGINT,
+  OUT nextCreate BIGINT)
+READS SQL DATA
+BEGIN
+
+  SELECT 
+         av.createTimestamp INTO nextCreate 
+    FROM 
+          Uris u, Attributes a, Origins o, AttributeValues av 
+    WHERE 
+          av.idUri=u.idUri AND 
+          av.idAttribute=a.idAttribute AND
+          av.idOrigin=o.idOrigin AND 
+          u.uriName=uri COLLATE utf16_unicode_ci AND 
+          a.attributeName=attribute COLLATE utf16_unicode_ci AND 
+          o.originName=origin COLLATE utf16_unicode_ci AND 
+          av.createTimestamp > oldestCreate
+    ORDER BY av.createTimestamp ASC LIMIT 1;
+
+END
+//
+DELIMITER ;

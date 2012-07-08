@@ -1,0 +1,43 @@
+/*
+ Deletes a URI from the database.  The id bindings for Attribute and 
+ Origin values are NOT removed from the coresponding tables.
+ If there is not an exact match on URI/Origin, no changes are made.
+ Note that regular expressions are NOT supported in this procedure.
+
+ Changes:
+ 2012/05/21 - Removed Origin parameter, got labels working.
+*/
+DROP PROCEDURE IF EXISTS deleteUri;
+DELIMITER //
+CREATE PROCEDURE deleteUri(pUri VARCHAR(170) CHARACTER SET UTF16 COLLATE utf16_unicode_ci)
+MODIFIES SQL DATA
+delProc:BEGIN
+  -- Id value of the URI to be deleted
+  DECLARE uriId INT;
+
+ -- Make sure autocommit is off
+  START TRANSACTION;
+
+  -- Make sure the Uri is found
+  SELECT u.idUri INTO uriId 
+    FROM Uris u
+    WHERE uriName = pUri;
+
+  IF uriId IS NULL THEN
+    ROLLBACK;
+    SELECT CONCAT('No matching Uri value for ', pUri) AS warning;
+    LEAVE delProc;
+  END IF;
+  
+  -- Delete from Uris table
+  DELETE FROM Uris WHERE idUri=uriId;
+
+  -- Delete from AttributeValues table
+  DELETE FROM AttributeValues 
+    WHERE idUri=uriId;
+
+  COMMIT;
+END
+//
+DELIMITER ;
+

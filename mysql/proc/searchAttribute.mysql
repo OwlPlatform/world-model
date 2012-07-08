@@ -1,0 +1,23 @@
+DROP PROCEDURE IF EXISTS searchAttribute;
+DELIMITER //
+CREATE PROCEDURE searchAttribute(regex VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
+READS SQL DATA
+BEGIN
+  DECLARE searchVal VARCHAR(170) CHARACTER SET utf16;
+  /*
+    Prepare the search parameters, replacing NULL values with an 'any-string' regex.
+  */
+  -- URI
+  SET searchVal = IFNULL(regex, '.*');
+
+  -- Make the query
+  SELECT 
+          a.attributeName as attribute
+    FROM 
+          Attributes a
+    WHERE 
+          a.attributeName REGEXP searchVal COLLATE utf16_unicode_ci;
+END
+//
+DELIMITER ;
+
