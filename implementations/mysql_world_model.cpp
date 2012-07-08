@@ -318,18 +318,25 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
   std::vector<std::string> tables{"AttributeValues.mysql", "Attributes.mysql",
                              "Origins.mysql", "Uris.mysql"};
   for (std::string& tname : tables) {
-    if (nullptr == db_handle) { return; }
     std::string fname = directory + "table/" + tname;
     std::ifstream file(fname.c_str());
     std::string cmd;
     //Read the whole file into cmd
     std::getline(file, cmd, '\0');
+    //Make sure the command isn't empty
+    if (cmd.empty()) {
+      std::cerr<<"Database does not exist and no mysql command found in path "<<fname<<'\n';
+      std::cerr<<"Manually create tables and stored proceudures or run this program with ./proc/\n";
+      std::cerr<<"and ./table/ subdirectories with mysql commands in them.\n";
+      mysql_close(db_handle);
+      throw std::runtime_error("Unable to initialize tables and procs in mysql database");
+    }
     //std::cerr<<"Executing commands in file "<<fname<<'\n';
     //Execute the commands in the file
     if (mysql_real_query(db_handle, cmd.c_str(), cmd.size())) {
       std::cerr<<"Error executing commands in file "<<fname<<": "<<mysql_error(db_handle)<<"\n";
       mysql_close(db_handle);
-      db_handle = nullptr;
+      throw std::runtime_error("Unable to initialize tables and procs in mysql database");
     }
     else {
       int status = 0;
@@ -343,7 +350,7 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
       if (0 < status) {
         std::cerr<<"Error executing commands in file "<<fname<<": "<<mysql_error(db_handle)<<"\n";
         mysql_close(db_handle);
-        db_handle = nullptr;
+        throw std::runtime_error("Unable to initialize tables and procs in mysql database");
       }
     }
   }
@@ -359,6 +366,14 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
     std::string cmd;
     //Read the whole file into cmd
     std::getline(file, cmd, '\0');
+    //Make sure the command isn't empty
+    if (cmd.empty()) {
+      std::cerr<<"Database does not exist and no mysql command found in path "<<fname<<'\n';
+      std::cerr<<"Manually create tables and stored proceudures or run this program with ./proc/\n";
+      std::cerr<<"and ./table/ subdirectories with mysql commands in them.\n";
+      mysql_close(db_handle);
+      throw std::runtime_error("Unable to initialize tables and procs in mysql database");
+    }
     //Now remove any of the delimiter command since they are not needed through the C API
     std::vector<std::string> dels = {"DELIMITER //", "//", "DELIMITER ;"};
     for (auto d : dels) {
@@ -371,7 +386,7 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
     if (mysql_real_query(db_handle, cmd.c_str(), cmd.size())) {
       std::cerr<<"Error executing commands in file "<<fname<<": "<<mysql_error(db_handle)<<"\n";
       mysql_close(db_handle);
-      db_handle = nullptr;
+      throw std::runtime_error("Unable to initialize tables and procs in mysql database");
     }
     else {
       int status = 0;
@@ -385,7 +400,7 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
       if (0 < status) {
         std::cerr<<"Error executing commands in file "<<fname<<": "<<mysql_error(db_handle)<<"\n";
         mysql_close(db_handle);
-        db_handle = nullptr;
+        throw std::runtime_error("Unable to initialize tables and procs in mysql database");
       }
     }
   }
@@ -470,91 +485,91 @@ MysqlWorldModel::MysqlWorldModel(std::string db_name, std::string user, std::str
     if (0 != mysql_set_server_option(db_handle, MYSQL_OPTION_MULTI_STATEMENTS_OFF)) {
       std::cerr<<"Error setting server options: "<<mysql_error(db_handle)<<'\n';
     }
-  }
 
-  //Set up the database settings for the query threads
-  QueryThread<WorldModel::world_state>::setDBInfo(db_name, user, password, db_handle);
+    //Set up the database settings for the query threads
+    QueryThread<WorldModel::world_state>::setDBInfo(db_name, user, password, db_handle);
 
-  //Load existing values using the current table.
-  {
-    std::cerr<<"Loading world model\n";
-    /*
-    std::u16string everything(u".*");
-    std::vector<u16string> all_attrs{u".*"};
-    cur_state = currentSnapshot(everything, all_attrs, true);
-    */
-    std::u16string uri(u".*");
-    std::vector<u16string> desired_attributes{u".*"};
-    //TODO FIXME Right now the current snapshot doesn't check the db so it
-    //cannot be used to load the table. However, this call is faster than
-    //the historic snapshot
-    //Return if we cannot get a connection
-    if (nullptr != db_handle) {
-      //CREATE PROCEDURE getCurrentValue(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
-      //attribute VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
-      //origin VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
-      std::string statement_str = "CALL getCurrentValue(?, ?, ?);";
-      MYSQL_STMT* statement_p = mysql_stmt_init(db_handle);
-      if (nullptr == statement_p) {
-        //TODO This should be better at handling an error.
-        std::cerr<<"Error creating statement for current snapshot.\n";
-      }
-      else {
-        if (mysql_stmt_prepare(statement_p, statement_str.c_str(), statement_str.size())) {
-          std::cerr<<"Failed to prepare statement: "<<statement_str<<": "<<mysql_error(db_handle)<<'\n';
+    //Load existing values using the current table.
+    {
+      std::cerr<<"Loading world model\n";
+      /*
+         std::u16string everything(u".*");
+         std::vector<u16string> all_attrs{u".*"};
+         cur_state = currentSnapshot(everything, all_attrs, true);
+         */
+      std::u16string uri(u".*");
+      std::vector<u16string> desired_attributes{u".*"};
+      //TODO FIXME Right now the current snapshot doesn't check the db so it
+      //cannot be used to load the table. However, this call is faster than
+      //the historic snapshot
+      //Return if we cannot get a connection
+      if (nullptr != db_handle) {
+        //CREATE PROCEDURE getCurrentValue(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
+        //attribute VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
+        //origin VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
+        std::string statement_str = "CALL getCurrentValue(?, ?, ?);";
+        MYSQL_STMT* statement_p = mysql_stmt_init(db_handle);
+        if (nullptr == statement_p) {
+          //TODO This should be better at handling an error.
+          std::cerr<<"Error creating statement for current snapshot.\n";
         }
         else {
-          MYSQL_BIND parameters[3];
-          memset(parameters, 0, sizeof(parameters));
-          std::string char8_uri(uri.begin(), uri.end());
-          parameters[0].buffer_type = MYSQL_TYPE_STRING;
-          parameters[0].buffer = (void*)char8_uri.data();
-          unsigned long uri_len = char8_uri.size();
-          parameters[0].length = &uri_len;
-          parameters[0].is_unsigned = true;
-          parameters[1].buffer_type = MYSQL_TYPE_STRING;
-          unsigned long attr_len;
-          parameters[1].length = &attr_len;
-          parameters[1].is_unsigned = true;
-          //TODO FIXME Accepting any origin right now
-          std::string char8_origin = ".*";
-          parameters[2].buffer_type = MYSQL_TYPE_STRING;
-          parameters[2].buffer = (void*)char8_origin.data();
-          unsigned long origin_len = char8_origin.size();
-          parameters[2].length = &origin_len;
-
-          for (std::u16string attr : desired_attributes) {
-            //parameters[1].buffer = (void*)attr.data();
-            //attr_len = attr.size()*2;
-            std::string char8_name(attr.begin(), attr.end());
-            parameters[1].buffer = (void*)char8_name.data();
-            attr_len = char8_name.size();
-            if (0 != mysql_stmt_bind_param(statement_p, parameters)) {
-              parameters[1].buffer = (void*)uri.data();
-              //TODO This should be better at handling an error.
-              std::cerr<<"Error binding variables for getCurrentValue.\n";
-            }
-            else {
-              //Execute the statement
-              //std::cerr<<"Executing getCurrentValue for "+std::string(attr.begin(), attr.end())+"\n";
-              std::function<WorldModel::world_state(MYSQL*)> bound_fun = [&](MYSQL* myhandle){ return this->fetchWorldData(statement_p, myhandle);};
-              WorldModel::world_state partial = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
-              for (auto I : partial) {
-                //Insert new attributes into the world state
-                cur_state[I.first].insert(cur_state[I.first].end(), I.second.begin(), I.second.end());
-              }
-            }
-            mysql_stmt_reset(statement_p);
+          if (mysql_stmt_prepare(statement_p, statement_str.c_str(), statement_str.size())) {
+            std::cerr<<"Failed to prepare statement: "<<statement_str<<": "<<mysql_error(db_handle)<<'\n';
           }
-          //std::cerr<<"Finished fetching world data\n";
+          else {
+            MYSQL_BIND parameters[3];
+            memset(parameters, 0, sizeof(parameters));
+            std::string char8_uri(uri.begin(), uri.end());
+            parameters[0].buffer_type = MYSQL_TYPE_STRING;
+            parameters[0].buffer = (void*)char8_uri.data();
+            unsigned long uri_len = char8_uri.size();
+            parameters[0].length = &uri_len;
+            parameters[0].is_unsigned = true;
+            parameters[1].buffer_type = MYSQL_TYPE_STRING;
+            unsigned long attr_len;
+            parameters[1].length = &attr_len;
+            parameters[1].is_unsigned = true;
+            //TODO FIXME Accepting any origin right now
+            std::string char8_origin = ".*";
+            parameters[2].buffer_type = MYSQL_TYPE_STRING;
+            parameters[2].buffer = (void*)char8_origin.data();
+            unsigned long origin_len = char8_origin.size();
+            parameters[2].length = &origin_len;
 
-          //Delete the statement
-          mysql_stmt_close(statement_p);
+            for (std::u16string attr : desired_attributes) {
+              //parameters[1].buffer = (void*)attr.data();
+              //attr_len = attr.size()*2;
+              std::string char8_name(attr.begin(), attr.end());
+              parameters[1].buffer = (void*)char8_name.data();
+              attr_len = char8_name.size();
+              if (0 != mysql_stmt_bind_param(statement_p, parameters)) {
+                parameters[1].buffer = (void*)uri.data();
+                //TODO This should be better at handling an error.
+                std::cerr<<"Error binding variables for getCurrentValue.\n";
+              }
+              else {
+                //Execute the statement
+                //std::cerr<<"Executing getCurrentValue for "+std::string(attr.begin(), attr.end())+"\n";
+                std::function<WorldModel::world_state(MYSQL*)> bound_fun = [&](MYSQL* myhandle){ return this->fetchWorldData(statement_p, myhandle);};
+                WorldModel::world_state partial = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
+                for (auto I : partial) {
+                  //Insert new attributes into the world state
+                  cur_state[I.first].insert(cur_state[I.first].end(), I.second.begin(), I.second.end());
+                }
+              }
+              mysql_stmt_reset(statement_p);
+            }
+            //std::cerr<<"Finished fetching world data\n";
+
+            //Delete the statement
+            mysql_stmt_close(statement_p);
+          }
         }
       }
+      std::cerr<<"World model loaded.\n";
     }
   }
-  std::cerr<<"World model loaded.\n";
 }
 
 MysqlWorldModel::~MysqlWorldModel() {
