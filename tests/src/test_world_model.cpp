@@ -786,24 +786,27 @@ int main(int argc, char** argv) {
   uint32_t num_cycles = 100;
   std::function<WorldModel* (std::string)> makeWM;
 
+  std::string username("username");
+  std::string password("password");
+
   //Define different factories for world models here
-  std::function<WorldModel* (std::string)> make_sql_wm = [](std::string dbname) {
+  std::function<WorldModel* (std::string)> make_sqlite_wm = [](std::string dbname) {
     return new SQLite3WorldModel(dbname);
   };
-  std::function<WorldModel* (std::string)> make_mysql_wm = [](std::string dbname) {
-    std::string user = "grail";
-    std::string pass = "grail335";
-    return new MysqlWorldModel(dbname, user, pass);
+  std::function<WorldModel* (std::string)> make_mysql_wm = [&](std::string dbname) {
+    //Use the existing username and password variables by reference
+    return new MysqlWorldModel(dbname, username, password);
   };
 
-  //Set the selected world model factory
-  makeWM = make_sql_wm;
+  //Set the selected world model factory (default to sqlite3)
+  makeWM = make_sqlite_wm;
 
   if (argc >= 3) {
     for (size_t cur_arg = 1; cur_arg+1 < argc; ++cur_arg) {
       if (string(argv[cur_arg]) == "-c") {
         try {
           num_cycles = stoi(string(argv[cur_arg+1]));
+          ++cur_arg;
         }
         catch (std::exception& e) {
           std::cerr<<"Error parsing -c argument as a number: "<<argv[cur_arg+1]<<'\n';
@@ -813,8 +816,9 @@ int main(int argc, char** argv) {
       //Select the type of world model to use
       else if (string(argv[cur_arg]) == "-wm") {
         string wmtype = string(argv[cur_arg+1]);
+        ++cur_arg;
         if ("sqlite" == wmtype) {
-          makeWM = make_sql_wm;
+          makeWM = make_sqlite_wm;
         }
         else if ("mysql" == wmtype) {
           makeWM = make_mysql_wm;
@@ -825,12 +829,24 @@ int main(int argc, char** argv) {
           return 0;
         }
       }
+      //Select the type of world model to use
+      else if (string(argv[cur_arg]) == "-u") {
+        username = string(argv[cur_arg+1]);
+        ++cur_arg;
+      }
+      //Select the type of world model to use
+      else if (string(argv[cur_arg]) == "-p") {
+        password = string(argv[cur_arg+1]);
+        ++cur_arg;
+      }
       else {
-        std::cout<<"This program will test the world model program.";
-        std::cout<<"The optional argument specifies how many cycles of various "<<
-          "read and write operations should be performed in the final threaded test.\n";
+        std::cout<<"This program will test the world model program.\n";
+        std::cout<<"Optional arguments specify how many cycles of various "<<
+          "read and write operations should be performed in the final threaded test,\n";
+        std::cout<<"which type of storage to use in the world model, or\n";
+        std::cout<<"the user name and password to use in the world model.\n";
 
-        std::cout<<"Usage is: "<<argv[0]<<" [-c #cycles] [-wm <world model type(sqlite|mysql)>]\n";
+        std::cout<<"Usage is: "<<argv[0]<<" [-c #cycles] [-u username] [-p password] [-wm <world model type(sqlite|mysql)>]\n";
         return 0;
       }
     }
