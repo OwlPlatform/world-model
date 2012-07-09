@@ -942,6 +942,8 @@ void sweeperThread() {
 }
 
 int main(int ac, char** av) {
+#ifndef USE_MYSQL
+  //sqlite3 world model
   if ( ac != 3 and ac != 1) {
     std::cerr<<"You must provide a port number to receive solver\n"<<
       "connections on and a port number to receive client connections on\n"<<
@@ -953,10 +955,46 @@ int main(int ac, char** av) {
   std::cout<<"Listening for solver on port number "<<solver_port<<'\n';
   std::cout<<"Listening for client on port number "<<client_port<<'\n';
 
-#ifndef USE_MYSQL
   SQLite3WorldModel wm("world_model.db");
 #else
-  MysqlWorldModel wm("world_model_db", "grail", "grail335");
+  //mysql world model
+  //Set default values
+  std::string username;
+  std::string password;
+  int solver_port = 7009;
+  int client_port = 7010;
+
+  if (ac >= 3) {
+    for (size_t cur_arg = 1; cur_arg+1 < ac; ++cur_arg) {
+      //Set username
+      if (string(av[cur_arg]) == "-u") {
+        username = string(av[cur_arg+1]);
+        ++cur_arg;
+      }
+      //Set password
+      else if (string(av[cur_arg]) == "-p") {
+        password = string(av[cur_arg+1]);
+        ++cur_arg;
+      }
+      //Try to interpret these as port numbers
+      else if (cur_arg + 2 == ac) {
+        solver_port = atoi(av[cur_arg]);
+        client_port = atoi(av[cur_arg+1]);
+      }
+      else {
+        std::cout<<"Usage is: "<<av[0]<<" [-u username] [-p password] [solver_port client_port]\n";
+        std::cout<<"The world model defaults to ports 7009 and 7010 if none are specified.\n";
+        std::cout<<"Port specifications must come last and either none or both must be provided.\n";
+        std::cout<<"You may also specify a username and password with the -u and -p arguments.\n";
+        return 0;
+      }
+    }
+  }
+  std::cout<<"Listening for solver on port number "<<solver_port<<'\n';
+  std::cout<<"Listening for client on port number "<<client_port<<'\n';
+
+
+  MysqlWorldModel wm("world_model_db", username, password);
 #endif
 
   //Set up a signal handler to catch interrupt signals so we can close gracefully
