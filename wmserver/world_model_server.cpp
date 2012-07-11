@@ -31,9 +31,11 @@
 //For access control
 #include <mutex>
 
-//For a multithreaded network server
 #include <owl/netbuffer.hpp>
 #include <owl/simple_sockets.hpp>
+#include <owl/temporarily_unavailable.hpp>
+
+//For a multithreaded network server
 #include <thread>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -228,16 +230,10 @@ class ClientConnection : public ThreadConnection {
                   try {
                     std::unique_lock<std::mutex> tx_lock(tx_mutex);
                     send(client::makeDataMessage(*aw, sr->ticket_number));
-                  } catch (std::runtime_error& err) {
+                  } catch (temporarily_unavailable& err) {
                     //If this is temporary then just wait a small amount (100 milliseconds)
-                    if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                      std::cerr<<"Socket temporarily not available handling stream request, 100 microseconds seconds.\n";
-                      usleep(100);
-                    }
-                    //Otherwise rethrow the error
-                    else {
-                      throw err;
-                    }
+                    std::cerr<<"Socket temporarily not available handling stream request, 100 microseconds seconds.\n";
+                    usleep(100);
                   }
                   //Delay a small amount between messages to avoid filling the network buffer.
                   usleep(10);
@@ -340,12 +336,42 @@ class ClientConnection : public ThreadConnection {
       //Before returning send a message to the client with the aliases of any
       //new attribute names or origins
       if (not new_names.empty()) {
-        std::unique_lock<std::mutex> tx_lock(tx_mutex);
-        send(makeAttrAliasMsg(new_names));
+        size_t tries = 0;
+        bool success = false;
+        while (not success and tries < 10) {
+          try {
+            ++tries;
+            std::unique_lock<std::mutex> tx_lock(tx_mutex);
+            send(makeAttrAliasMsg(new_names));
+            success = true;
+          } catch (temporarily_unavailable& err) {
+            //If this is temporary then just wait a small amount (100 milliseconds)
+            usleep(100);
+          }
+        }
+        if (not success) {
+          std::cerr<<"Error sending new type messages to client (socket unavailable).\n";
+          //TODO FIXME Disconnect
+        }
       }
       if (not new_origins.empty()) {
-        std::unique_lock<std::mutex> tx_lock(tx_mutex);
-        send(makeOriginAliasMsg(new_origins));
+        size_t tries = 0;
+        bool success = false;
+        while (not success and tries < 10) {
+          try {
+            ++tries;
+            std::unique_lock<std::mutex> tx_lock(tx_mutex);
+            send(makeOriginAliasMsg(new_origins));
+            success = true;
+          } catch (temporarily_unavailable& err) {
+            //If this is temporary then just wait a small amount (100 milliseconds)
+            usleep(100);
+          }
+        }
+        if (not success) {
+          std::cerr<<"Error sending new orign alias messages to client (socket unavailable).\n";
+          //TODO FIXME Disconnect
+        }
       }
       return awds;
     }
@@ -488,16 +514,10 @@ class ClientConnection : public ThreadConnection {
                   }
                   //Delay a small amount between messages to avoid filling the network buffer.
                   usleep(1500);
-                } catch (std::runtime_error& err) {
+                } catch (temporarily_unavailable& err) {
                   //If this is temporary then just wait a small amount (100 milliseconds)
-                  if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                    std::cerr<<"Socket temporarily not available during snapshot request, waiting 0.1 seconds.\n";
-                    usleep(100);
-                  }
-                  //Otherwise rethrow the error
-                  else {
-                    throw err;
-                  }
+                  std::cerr<<"Socket temporarily not available during snapshot request, waiting 0.1 seconds.\n";
+                  usleep(100);
                 }
               }
               //Send the request complete message after all objects are sent
@@ -515,16 +535,10 @@ class ClientConnection : public ThreadConnection {
                 try {
                   std::unique_lock<std::mutex> tx_lock(tx_mutex);
                   send(client::makeDataMessage(*aw, ticket));
-                } catch (std::runtime_error& err) {
+                } catch (temporarily_unavailable& err) {
                   //If this is temporary then just wait a small amount (100 milliseconds)
-                  if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                    std::cerr<<"Socket temporarily not available during range request, waiting 100 microseconds.\n";
-                    usleep(100);
-                  }
-                  //Otherwise rethrow the error
-                  else {
-                    throw err;
-                  }
+                  std::cerr<<"Socket temporarily not available during range request, waiting 100 microseconds.\n";
+                  usleep(100);
                 }
                 //Delay a small amount between messages to avoid filling the network buffer.
                 usleep(10);
@@ -573,16 +587,10 @@ class ClientConnection : public ThreadConnection {
                 try {
                   std::unique_lock<std::mutex> tx_lock(tx_mutex);
                   send(client::makeDataMessage(*aw, ticket));
-                } catch (std::runtime_error& err) {
+                } catch (temporarily_unavailable& err) {
                   //If this is temporary then just wait a small amount (100 milliseconds)
-                  if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                    std::cerr<<"Socket temporarily not available handling stream request, waiting 100 microseconds.\n";
-                    usleep(100);
-                  }
-                  //Otherwise rethrow the error
-                  else {
-                    throw err;
-                  }
+                  std::cerr<<"Socket temporarily not available handling stream request, waiting 100 microseconds.\n";
+                  usleep(100);
                 }
                 //Delay a small amount between messages to avoid filling the network buffer.
                 usleep(10);
