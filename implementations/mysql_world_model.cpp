@@ -1204,6 +1204,8 @@ void bindSQL(MYSQL_BIND* bind, unsigned long* lengths, my_bool* errors, my_bool*
 
 //Fetches the world data from a mysql_stmt_execute command (call after mysql_stmt_execute)
 WorldModel::world_state MysqlWorldModel::fetchWorldData(MYSQL_STMT* stmt, MYSQL* handle) {
+  //TODO FIXME Throw exceptions here when errors occur so that the task pool threads (QueryThread)
+  //can catch the exceptions and reset the database connection when errors occur
   WorldModel::world_state ws;
   //Expecting a set of these columns:
   //u.uriName AS uri, a.attributeName AS attribute, o.originName AS origin, 

@@ -31,9 +31,11 @@
 //For access control
 #include <mutex>
 
-//For a multithreaded network server
 #include <owl/netbuffer.hpp>
 #include <owl/simple_sockets.hpp>
+#include <owl/temporarily_unavailable.hpp>
+
+//For a multithreaded network server
 #include <thread>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -198,72 +200,72 @@ class ClientConnection : public ThreadConnection {
       stream_thread_started = true;
       grail_time next_service = getGRAILTime();
       while (not interrupted) {
-        //Remember the time we started servicing this loop to save function calls
-        grail_time cur_time = getGRAILTime();
-        {
-          std::unique_lock<std::mutex> stream_lock(stream_request_mutex);
-          //Handle streaming data - see if any stream needs new data.
-          for (auto sr = streaming_requests.begin(); sr != streaming_requests.end(); ++sr) {
-            //Update this streaming request if it is time to update it
-            if (sr->last_serviced + sr->interval < cur_time) {
-              //Enable any newly matching on_demand attributes
-              for (auto attr = sr->desired_attributes.begin(); attr != sr->desired_attributes.end(); ++attr) {
-                std::unique_lock<std::mutex> lck(on_demand_lock);
-                //If this has not been requested yet and the attribute name now
-                //appears in the trans_request_counts map then make a new request.
-                if ((requested_on_demands.end() == requested_on_demands.find(*attr) or
-                      0 == requested_on_demands[*attr].count(sr->search_uri)) and
-                    trans_request_counts.end() != trans_request_counts.find(*attr)) {
-                  debug<<"Adding on_demand request for attribute "<<std::string(attr->begin(), attr->end())<<
-                    " with expression "<<std::string(sr->search_uri.begin(), sr->search_uri.end())<<"\n";
-                  trans_request_counts[*attr].insert(sr->search_uri);
-                  requested_on_demands[*attr].insert(sr->search_uri);
+        try {
+          //Remember the time we started servicing this loop to save function calls
+          grail_time cur_time = getGRAILTime();
+          {
+            std::unique_lock<std::mutex> stream_lock(stream_request_mutex);
+            //Handle streaming data - see if any stream needs new data.
+            for (auto sr = streaming_requests.begin(); sr != streaming_requests.end(); ++sr) {
+              //Update this streaming request if it is time to update it
+              if (sr->last_serviced + sr->interval < cur_time) {
+                //Enable any newly matching on_demand attributes
+                for (auto attr = sr->desired_attributes.begin(); attr != sr->desired_attributes.end(); ++attr) {
+                  std::unique_lock<std::mutex> lck(on_demand_lock);
+                  //If this has not been requested yet and the attribute name now
+                  //appears in the trans_request_counts map then make a new request.
+                  if ((requested_on_demands.end() == requested_on_demands.find(*attr) or
+                        0 == requested_on_demands[*attr].count(sr->search_uri)) and
+                      trans_request_counts.end() != trans_request_counts.find(*attr)) {
+                    debug<<"Adding on_demand request for attribute "<<std::string(attr->begin(), attr->end())<<
+                      " with expression "<<std::string(sr->search_uri.begin(), sr->search_uri.end())<<"\n";
+                    trans_request_counts[*attr].insert(sr->search_uri);
+                    requested_on_demands[*attr].insert(sr->search_uri);
+                  }
                 }
-              }
-              vector<AliasedWorldData> aws = updateStreamRequest(*sr);
-              for (auto aw = aws.begin(); aw != aws.end(); ++aw) {
-                //Don't bother sending a message if there aren't any updated
-                //attributes.
-                if (not aw->attributes.empty()) {
-                  try {
-                    std::unique_lock<std::mutex> tx_lock(tx_mutex);
-                    send(client::makeDataMessage(*aw, sr->ticket_number));
-                  } catch (std::runtime_error& err) {
-                    //If this is temporary then just wait a small amount (100 milliseconds)
-                    if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
+                vector<AliasedWorldData> aws = updateStreamRequest(*sr);
+                for (auto aw = aws.begin(); aw != aws.end(); ++aw) {
+                  //Don't bother sending a message if there aren't any updated
+                  //attributes.
+                  if (not aw->attributes.empty()) {
+                    try {
+                      std::unique_lock<std::mutex> tx_lock(tx_mutex);
+                      send(client::makeDataMessage(*aw, sr->ticket_number));
+                    } catch (temporarily_unavailable& err) {
+                      //If this is temporary then just wait a small amount (100 milliseconds)
                       std::cerr<<"Socket temporarily not available handling stream request, 100 microseconds seconds.\n";
                       usleep(100);
                     }
-                    //Otherwise rethrow the error
-                    else {
-                      throw err;
-                    }
+                    //Delay a small amount between messages to avoid filling the network buffer.
+                    usleep(10);
                   }
-                  //Delay a small amount between messages to avoid filling the network buffer.
-                  usleep(10);
+                }
+              }
+              //Remember when this should be serviced
+              //Set next_service to the nearest service time
+              else {
+                if (sr->last_serviced + sr->interval - cur_time < next_service) {
+                  next_service = sr->last_serviced + sr->interval - cur_time;
                 }
               }
             }
-            //Remember when this should be serviced
-            //Set next_service to the nearest service time
-            else {
-              if (sr->last_serviced + sr->interval - cur_time < next_service) {
-                next_service = sr->last_serviced + sr->interval - cur_time;
-              }
-            }
+            //Release the lock on the streaming requests (stream_lock) through RIAA
           }
-          //Release the lock on the streaming requests (stream_lock) through RIAA
-        }
-        //Wait for the next service time, or a minimum of 10 microseconds and a maximum
-        //of 10000 microseconds (10 milliseconds)
-        if (next_service == 0) {
-          usleep(10);
-        }
-        else if (next_service > 10) {
-          usleep(10000);
-        }
-        else {
-          usleep(next_service*1000);
+          //Wait for the next service time, or a minimum of 10 microseconds and a maximum
+          //of 10000 microseconds (10 milliseconds)
+          if (next_service == 0) {
+            usleep(10);
+          }
+          else if (next_service > 10) {
+            usleep(10000);
+          }
+          else {
+            usleep(next_service*1000);
+          }
+        } catch (std::exception& err) {
+          std::cerr<<"Solver thread error in streaming thread: "<<err.what()<<'\n';
+          interrupted = true;
+          return;
         }
       }
     }
@@ -340,12 +342,42 @@ class ClientConnection : public ThreadConnection {
       //Before returning send a message to the client with the aliases of any
       //new attribute names or origins
       if (not new_names.empty()) {
-        std::unique_lock<std::mutex> tx_lock(tx_mutex);
-        send(makeAttrAliasMsg(new_names));
+        size_t tries = 0;
+        bool success = false;
+        while (not success and tries < 10) {
+          try {
+            ++tries;
+            std::unique_lock<std::mutex> tx_lock(tx_mutex);
+            send(makeAttrAliasMsg(new_names));
+            success = true;
+          } catch (temporarily_unavailable& err) {
+            //If this is temporary then just wait a small amount (100 milliseconds)
+            usleep(100);
+          }
+        }
+        if (not success) {
+          std::cerr<<"Error sending new type messages to client (socket unavailable).\n";
+          //TODO FIXME Disconnect
+        }
       }
       if (not new_origins.empty()) {
-        std::unique_lock<std::mutex> tx_lock(tx_mutex);
-        send(makeOriginAliasMsg(new_origins));
+        size_t tries = 0;
+        bool success = false;
+        while (not success and tries < 10) {
+          try {
+            ++tries;
+            std::unique_lock<std::mutex> tx_lock(tx_mutex);
+            send(makeOriginAliasMsg(new_origins));
+            success = true;
+          } catch (temporarily_unavailable& err) {
+            //If this is temporary then just wait a small amount (100 milliseconds)
+            usleep(100);
+          }
+        }
+        if (not success) {
+          std::cerr<<"Error sending new orign alias messages to client (socket unavailable).\n";
+          //TODO FIXME Disconnect
+        }
       }
       return awds;
     }
@@ -488,16 +520,10 @@ class ClientConnection : public ThreadConnection {
                   }
                   //Delay a small amount between messages to avoid filling the network buffer.
                   usleep(1500);
-                } catch (std::runtime_error& err) {
+                } catch (temporarily_unavailable& err) {
                   //If this is temporary then just wait a small amount (100 milliseconds)
-                  if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                    std::cerr<<"Socket temporarily not available during snapshot request, waiting 0.1 seconds.\n";
-                    usleep(100);
-                  }
-                  //Otherwise rethrow the error
-                  else {
-                    throw err;
-                  }
+                  std::cerr<<"Socket temporarily not available during snapshot request, waiting 0.1 seconds.\n";
+                  usleep(100);
                 }
               }
               //Send the request complete message after all objects are sent
@@ -515,16 +541,10 @@ class ClientConnection : public ThreadConnection {
                 try {
                   std::unique_lock<std::mutex> tx_lock(tx_mutex);
                   send(client::makeDataMessage(*aw, ticket));
-                } catch (std::runtime_error& err) {
+                } catch (temporarily_unavailable& err) {
                   //If this is temporary then just wait a small amount (100 milliseconds)
-                  if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                    std::cerr<<"Socket temporarily not available during range request, waiting 100 microseconds.\n";
-                    usleep(100);
-                  }
-                  //Otherwise rethrow the error
-                  else {
-                    throw err;
-                  }
+                  std::cerr<<"Socket temporarily not available during range request, waiting 100 microseconds.\n";
+                  usleep(100);
                 }
                 //Delay a small amount between messages to avoid filling the network buffer.
                 usleep(10);
@@ -573,16 +593,10 @@ class ClientConnection : public ThreadConnection {
                 try {
                   std::unique_lock<std::mutex> tx_lock(tx_mutex);
                   send(client::makeDataMessage(*aw, ticket));
-                } catch (std::runtime_error& err) {
+                } catch (temporarily_unavailable& err) {
                   //If this is temporary then just wait a small amount (100 milliseconds)
-                  if (err.what() == std::string("Error sending data over socket: Resource temporarily unavailabl")) {
-                    std::cerr<<"Socket temporarily not available handling stream request, waiting 100 microseconds.\n";
-                    usleep(100);
-                  }
-                  //Otherwise rethrow the error
-                  else {
-                    throw err;
-                  }
+                  std::cerr<<"Socket temporarily not available handling stream request, waiting 100 microseconds.\n";
+                  usleep(100);
                 }
                 //Delay a small amount between messages to avoid filling the network buffer.
                 usleep(10);
