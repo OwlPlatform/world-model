@@ -961,7 +961,7 @@ int main(int ac, char** av) {
   if ( ac != 3 and ac != 1) {
     std::cerr<<"You must provide a port number to receive solver\n"<<
       "connections on and a port number to receive client connections on\n"<<
-      "or provide no arguments and the default ports (7008 7010) will be used.\n";
+      "or provide no arguments and the default ports (7009 7010) will be used.\n";
     return 0;
   }
   int solver_port = ac == 3 ? atoi(av[1]) : 7009;
