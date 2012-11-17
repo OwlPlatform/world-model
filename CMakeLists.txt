@@ -48,6 +48,9 @@ CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/owlwm.pc.cmake ${CMAKE_CURRENT_BINARY
 INSTALL( FILES ${CMAKE_CURRENT_BINARY_DIR}/owlwm.pc DESTINATION ${PKGCONFIG_INSTALL_PREFIX})
 #add_library (LibOwl SHARED ${IncludeFiles} ${SourceFiles})
 
+#Note that not all distributions put init script in /etc/init.d (Slackware is in /etc/rc.d)
+INSTALL( FILES ${OwlWM_SOURCE_DIR}/scripts/rc.owl-world-model PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE DESTINATION /etc/init.d )
+
 #$(LIBDIR)/libowl.a: $(LIBDIR)/sensor_aggregator_protocol.o $(LIBDIR)/aggregator_solver_protocol.o $(LIBDIR)/world_model_protocol.o $(LIBDIR)/netbuffer.o $(LIBDIR)/sample_data.o $(LIBDIR)/simple_sockets.o
 
 # uninstall target
