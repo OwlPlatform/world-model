@@ -111,18 +111,22 @@ Debug& operator<<(Debug& dbg, T arg) {
   return dbg;
 }
 
-//Store the URIs of requests for on_demand data.
+//Store the URIs of requests for on demand data.
 //The solvers will poll this information to see if they should turn
-//their on_demand data on or off and to check which URIs on_demand
+//their on demand data on or off and to check which URIs on demand
 //data should be generated for.
+//The variable @od_req_counts is a map from currently available
+//on demand data types to requests for that data.
+//The variable @on_demand_lock should be locked before modifying
+//@od_req_counts.
+std::map<std::u16string, std::multiset<u16string>> od_req_counts;
 std::mutex on_demand_lock;
-std::map<std::u16string, std::multiset<u16string>> trans_request_counts;
 
 /**
  * Clients connected to the world model can make requests for data.
  * Before data is sent to clients the names of origins and attributes
  * are first aliased in a message that is sent to the client.
- * If clients make requests for on_demand data then that on_demand
+ * If clients make requests for on demand data then that on demand
  * data is turned on from whatever solvers provide it.
  */
 class ClientConnection : public ThreadConnection {
@@ -179,8 +183,11 @@ class ClientConnection : public ThreadConnection {
     //Alias from name to number for this client.
     std::map<std::u16string, uint32_t> solution_aliases;
     std::map<std::u16string, uint32_t> origin_aliases;
-    //Remember which on_demand types were requested so that
-    //the requests can be removed when this connection closes.
+    /**
+     * Remember which on demand types were requested so that
+     * the requests can be removed when this connection closes.
+     * A map from attributes to URIs
+     */
     std::map<u16string, std::set<u16string>> requested_on_demands;
     //Remember the state of streaming requests
     vector<RequestState> streaming_requests;
@@ -209,17 +216,19 @@ class ClientConnection : public ThreadConnection {
             for (auto sr = streaming_requests.begin(); sr != streaming_requests.end(); ++sr) {
               //Update this streaming request if it is time to update it
               if (sr->last_serviced + sr->interval < cur_time) {
-                //Enable any newly matching on_demand attributes
+                //Enable any newly matching on demand attributes
+                //TODO FIXME This is inefficient -- should be checked only when
+                //new on demand data appears.
                 for (auto attr = sr->desired_attributes.begin(); attr != sr->desired_attributes.end(); ++attr) {
                   std::unique_lock<std::mutex> lck(on_demand_lock);
                   //If this has not been requested yet and the attribute name now
-                  //appears in the trans_request_counts map then make a new request.
+                  //appears in the od_req_counts map then make a new request.
                   if ((requested_on_demands.end() == requested_on_demands.find(*attr) or
                         0 == requested_on_demands[*attr].count(sr->search_uri)) and
-                      trans_request_counts.end() != trans_request_counts.find(*attr)) {
+                      od_req_counts.end() != od_req_counts.find(*attr)) {
                     debug<<"Adding on_demand request for attribute "<<std::string(attr->begin(), attr->end())<<
                       " with expression "<<std::string(sr->search_uri.begin(), sr->search_uri.end())<<"\n";
-                    trans_request_counts[*attr].insert(sr->search_uri);
+                    od_req_counts[*attr].insert(sr->search_uri);
                     requested_on_demands[*attr].insert(sr->search_uri);
                   }
                 }
@@ -287,16 +296,16 @@ class ClientConnection : public ThreadConnection {
     ~ClientConnection() {
       std::cerr<<"Client connection closing.\n";
       interrupted = true;
-      //Turn off streaming requests for on_demand types
+      //Turn off streaming requests for on demand types
       for (auto rt = requested_on_demands.begin(); rt != requested_on_demands.end(); ++rt) {
         for (auto uri = rt->second.begin(); uri != rt->second.end(); ++uri) {
-          //Lock the on_demand request mutex and remove these requests
+          //Lock the on demand request mutex and remove these requests
           std::unique_lock<std::mutex> lck(on_demand_lock);
-          if (trans_request_counts.end() != trans_request_counts.find(rt->first)) {
-            std::multiset<u16string>& trc = trans_request_counts[rt->first];
+          if (od_req_counts.end() != od_req_counts.find(rt->first)) {
+            std::multiset<u16string>& trc = od_req_counts[rt->first];
             auto req_iterator = trc.find(*uri);
             if (req_iterator != trc.end()) {
-              debug<<"Decrementing on_demand request count for URI "<<std::string(uri->begin(), uri->end())<<", attribute "<<std::string(rt->first.begin(), rt->first.end())<<"\n";
+              debug<<"Decrementing on demand request count for URI "<<std::string(uri->begin(), uri->end())<<", attribute "<<std::string(rt->first.begin(), rt->first.end())<<"\n";
               trc.erase(req_iterator);
             }
           }
@@ -573,15 +582,15 @@ class ClientConnection : public ThreadConnection {
               if (rs.interval < 0) {
                 throw std::runtime_error("Subscription received with negative interval.");
               }
-              //Check the attributes to see if any are on_demand types.
+              //Check the attributes to see if any are on demand types.
               for (auto attr = request.attributes.begin(); attr != request.attributes.end(); ++attr) {
                 debug<<"Checking if "<<std::string(attr->begin(), attr->end())<<" is a on_demand type.\n";
                 std::unique_lock<std::mutex> lck(on_demand_lock);
-                if (trans_request_counts.end() != trans_request_counts.find(*attr)) {
-                  debug<<"Adding on_demand request count for attribute "<<
+                if (od_req_counts.end() != od_req_counts.find(*attr)) {
+                  debug<<"Adding on demand request count for attribute "<<
                     std::string(attr->begin(), attr->end())<<" with URI expression "<<
                     std::string(rs.search_uri.begin(), rs.search_uri.end())<<"\n";
-                  trans_request_counts[*attr].insert(rs.search_uri);
+                  od_req_counts[*attr].insert(rs.search_uri);
                   requested_on_demands[*attr].insert(rs.search_uri);
                 }
               }
@@ -617,8 +626,39 @@ class ClientConnection : public ThreadConnection {
               //Cancel the stream corresponding to this request number.
               for (auto I = streaming_requests.begin(); I != streaming_requests.end(); ++I) {
                 if (I->ticket_number == ticket) {
-                  //TODO FIXME Need to cancel on_demands from this request
-                  streaming_requests.erase(I);
+                  auto sr = std::find_if(streaming_requests.begin(), streaming_requests.end(),
+                      [&](RequestState& rs) {return rs.ticket_number == ticket;});
+                  if (sr != streaming_requests.end()) {
+                    //Need to cancel on demand count from this request
+                    //The request state requested a URI matching sr->search_uri
+                    //and attributes matching sr->desired_attributes
+                    for (auto attr = sr->desired_attributes.begin(); attr != sr->desired_attributes.end(); ++attr) {
+                      //If this was requested cancel the request from
+                      //the od_req_counts map.
+                      if (requested_on_demands.end() != requested_on_demands.find(*attr) and
+                        0 != requested_on_demands[*attr].count(sr->search_uri)) {
+                        std::set<u16string>& rod = requested_on_demands[*attr];
+
+                        //Verify this attribute was indeed requested in the od_req_counts map
+                        {
+                          std::unique_lock<std::mutex> lck(on_demand_lock);
+                          auto req_iter = od_req_counts.find(*attr);
+                          if ( od_req_counts.end() != req_iter) {
+                            //And remove it
+                            std::multiset<u16string>& req = req_iter->second;
+                            req.erase(req.find(sr->search_uri));
+                          }
+                        }
+
+                        //Mark this as not requested by erasing one entry of
+                        //the search URI from the rquested on demands map
+                        rod.erase(rod.find(sr->search_uri));
+                      }
+                    }
+                  }
+                  //Remove any request with this ticket number
+                  streaming_requests.erase(std::remove_if(streaming_requests.begin(), streaming_requests.end(),
+                        [&](RequestState& rs) {return rs.ticket_number == ticket;}), streaming_requests.end());
                   std::unique_lock<std::mutex> tx_lock(tx_mutex);
                   //Send the request complete message after canceling
                   send(client::makeRequestComplete(ticket));
@@ -668,9 +708,9 @@ class SolverConnection : public ThreadConnection {
     static int total_connections;
     std::map<uint32_t, std::u16string> solution_types;
     std::map<std::u16string, uint32_t> solution_aliases;
-    //The on_demand types (specified by name and origin) of this connection
+    //The on demand types (specified by name and origin) of this connection
     //and their streaming / not streaming status. Default is off.
-    //The key value contains the on_demand attribute name and the value
+    //The key value contains the on demand attribute name and the value
     //is a set that indicates which URI expressions are being sent.
     std::map<std::u16string, std::set<std::u16string>> on_demand_status;
     MessageReceiver solver_server;
@@ -755,13 +795,13 @@ class SolverConnection : public ThreadConnection {
                 if (type_alias->on_demand) {
                   on_demand_status[type_alias->type] = std::set<u16string>();
                   {
-                    //Zero the on_demand request count for this on_demand if it is new
+                    //Zero the on demand request count for this on demand if it is new
                     std::unique_lock<std::mutex> lck(on_demand_lock);
-                    if (trans_request_counts.find(type_alias->type) == trans_request_counts.end()) {
-                      trans_request_counts[type_alias->type] = std::multiset<u16string>();
+                    if (od_req_counts.find(type_alias->type) == od_req_counts.end()) {
+                      od_req_counts[type_alias->type] = std::multiset<u16string>();
                     }
                   }
-                  //Register this as a on_demand type with the world model
+                  //Register this as an on demand type with the world model
                   wm.registerTransient(type_alias->type, origin);
                 }
                 debug<<"Type "<<std::string(type_alias->type.begin(), type_alias->type.end())<<
@@ -785,7 +825,7 @@ class SolverConnection : public ThreadConnection {
                 if (solution_types.find(soln->type_alias) != solution_types.end()) {
                   Attribute attr{solution_types[soln->type_alias], soln->time, 0, origin, soln->data};
                   new_data[soln->target].push_back(attr);
-                  //Don't print anything out for on_demands as they are quite numerous.
+                  //Don't print anything out for on demand requests as they are quite numerous.
                   if (on_demand_status.empty() or
                       on_demand_status.end() == on_demand_status.find(solution_types[soln->type_alias])) {
                     debug<<"Inserting solution "<<
@@ -844,22 +884,22 @@ class SolverConnection : public ThreadConnection {
             //Sleep for a millisecond to wait for a new message.
             usleep(1);
           }
-          //If this solver has any on_demand data types check to see if their
-          //on_demand request status has changed.
+          //If this solver has any on demand data types check to see if their
+          //on demand request status has changed.
           if (not on_demand_status.empty()) {
             std::vector<std::tuple<uint32_t, std::vector<std::u16string>>> start_aliases;
             std::vector<std::tuple<uint32_t, std::vector<std::u16string>>> stop_aliases;
             {
               std::unique_lock<std::mutex> lck(on_demand_lock);
               for (auto trans = on_demand_status.begin(); trans != on_demand_status.end(); ++trans) {
-                //Check if this on_demand is not being sent but was requested
-                std::multiset<u16string>& uri_requests = trans_request_counts[trans->first];
+                //Check if this on demand is not being sent but was requested
+                std::multiset<u16string>& uri_requests = od_req_counts[trans->first];
                 auto new_req = std::make_tuple(solution_aliases[trans->first], vector<u16string>());
                 auto stop_req = std::make_tuple(solution_aliases[trans->first], vector<u16string>());
                 for (auto uri = uri_requests.begin(); uri != uri_requests.end(); ++uri) {
                   //Check for requests
                   if (0 == trans->second.count(*uri)) {
-                    debug<<"Enabling on_demand "<<std::string(trans->first.begin(), trans->first.end())<<
+                    debug<<"Enabling on demand "<<std::string(trans->first.begin(), trans->first.end())<<
                       " on uri pattern "<<std::string(uri->begin(), uri->end())<<'\n';
                     trans->second.insert(*uri);
                     std::get<1>(new_req).push_back(*uri);
@@ -867,7 +907,7 @@ class SolverConnection : public ThreadConnection {
                 }
                 auto on_uri = trans->second.begin();
                 while ( on_uri != trans->second.end()) {
-                  //Alternatively if the on_demand is being sent but no longer
+                  //Alternatively if the on demand data is being sent but no longer
                   //needs to be turn it off
                   if (0 == uri_requests.count(*on_uri)) {
                     debug<<"Disabling on_demand "<<std::string(trans->first.begin(), trans->first.end())<<
