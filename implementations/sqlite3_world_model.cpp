@@ -622,7 +622,8 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
   std::unique_lock<std::mutex> lck(sq_mutex);
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
     //See if the standing query cares about this expiration
-    sq->expireURI(uri);
+std::cerr<<"Expiring uri "<<std::string(uri.begin(), uri.end())<<" from the sqlite3 wm server\n";
+    sq->expireURI(uri, expires);
   }
 }
 
@@ -720,7 +721,7 @@ void SQLite3WorldModel::deleteURI(world_model::URI uri) {
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
     //See if the standing query cares about this deletion
     //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURI(uri);
+    sq->expireURI(uri, -1);
   }
 }
 

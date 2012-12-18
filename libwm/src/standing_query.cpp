@@ -27,6 +27,8 @@
 #include <string>
 #include <utility>
 
+#include <iostream>
+
 #include <standing_query.hpp>
 
 using std::u16string;
@@ -198,6 +200,10 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
       int match = regexec(&uri_regex, search_id.c_str(), 1, &pmatch, 0);
       if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
         uri_accepted[I->first] = true;
+        {
+          std::unique_lock<std::mutex> lck(data_mutex);
+          current_matches[I->first] = std::set<std::u16string>();
+        }
         matches.push_back(I->first);
         //Start off with no matching attributes
         uri_matches[I->first] = std::set<size_t>();
@@ -319,6 +325,10 @@ StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& w
       int match = regexec(&uri_regex, search_id.c_str(), 1, &pmatch, 0);
       if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
         uri_accepted[I->first] = true;
+        {
+          std::unique_lock<std::mutex> lck(data_mutex);
+          current_matches[I->first] = std::set<std::u16string>();
+        }
         matches.push_back(I->first);
         //Start off with no matching attributes
         uri_matches[I->first] = std::set<size_t>();
@@ -395,7 +405,7 @@ StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& w
   return result;
 }
 
-void StandingQuery::expireURI(world_model::URI uri) {
+void StandingQuery::expireURI(world_model::URI uri, world_model::grail_time expires) {
   //Make sure we don't store a partial for this if it is expired or deleted.
   partial.erase(uri);
   uri_accepted.erase(uri);
@@ -405,9 +415,18 @@ void StandingQuery::expireURI(world_model::URI uri) {
   //If this data is in the current state then expire all of the attributes
   if (state != cur_state.end()) {
     std::for_each(state->second.begin(), state->second.end(), [&](world_model::Attribute& attr) {
-        //TODO FIXME Maybe the expire and delete should be different function
-        //calls so that the true expiration date can be represented during expiration?
-        attr.expiration_date = attr.creation_date; });
+        current_matches[uri].erase(attr.name);
+        attr.expiration_date = expires; });
+  }
+  //If the current state does not have values for some attributes that were
+  //previously sent then make sure to expire these as well
+  if (current_matches.end() != current_matches.find(uri)) {
+    std::set<std::u16string>& attr_names = current_matches[uri];
+    for (const std::u16string& attr_name : attr_names) {
+      //Push an attribute with the expired attribute's name and no data
+      cur_state[uri].push_back(world_model::Attribute{attr_name, expires, expires, u"", {}});
+    }
+    current_matches.erase(uri);
   }
 }
 
@@ -431,11 +450,18 @@ void StandingQuery::expireURIAttributes(world_model::URI uri,
     auto state = cur_state.find(uri);
     //If this data is in the current state then expire all of the attributes
     if (state != cur_state.end()) {
+      //Function to quickly find to be done entries
+      auto tbd = [&](const std::u16string& name) {
+        return entries.end() != std::find_if(entries.begin(), entries.end(),
+            [&](const Attribute& attr) { return attr.name == name;});};
       std::for_each(state->second.begin(), state->second.end(), [&](Attribute& attr) {
-          //TODO FIXME Maybe the expire and delete should be different function
-          //calls so that the true expiration date can be represented during expiration?
-          //TODO FIXME HERE set expired attributes to expired
-          attr.expiration_date = attr.creation_date; });
+          if (tbd(attr.name)) {
+std::cerr<<"Trying to set expiration date of attributes "<<std::string(attr.name.begin(), attr.name.end())<<"\n";
+            //TODO FIXME Maybe the expire and delete should be different function
+            //calls so that the true expiration date can be represented during expiration?
+            //TODO FIXME HERE set expired attributes to expired
+            attr.expiration_date = attr.creation_date;
+          }});
     }
   }
 }
@@ -448,6 +474,7 @@ void StandingQuery::insertData(world_state& ws) {
     //Update the state with each entry
     std::vector<world_model::Attribute>& state = cur_state[I->first];
     for (auto entry = I->second.begin(); entry != I->second.end(); ++entry) {
+
       //std::cerr<<"Checking URI, name "<<std::string(I->first.begin(), I->first.end())<<
       //  ", "<<std::string(entry->name.begin(), entry->name.end())<<'\n';
       //Check if there is already an entry with the same name and origin
@@ -463,6 +490,8 @@ void StandingQuery::insertData(world_state& ws) {
       else {
         //std::cerr<<"Pushing back new entry\n";
         state.push_back(*entry);
+        //Remember that this attribute was stored for this identifier
+        current_matches[I->first].insert(entry->name);
       }
     }
   }

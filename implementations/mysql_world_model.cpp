@@ -884,7 +884,7 @@ void MysqlWorldModel::expireURI(world_model::URI uri, world_model::grail_time ex
   std::unique_lock<std::mutex> lck(sq_mutex);
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
     //See if the standing query cares about this expiration
-    sq->expireURI(uri);
+    sq->expireURI(uri, expires);
   }
 }
 
@@ -952,6 +952,13 @@ void MysqlWorldModel::deleteURI(world_model::URI uri) {
   std::function<WorldModel::world_state(MYSQL*)> bound_fun = [&](MYSQL* handle){ return this->_deleteURI(uri, handle);};
   //Send this task to a thread in the thread pool
   WorldModel::world_state result = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
+
+  //Lock the standing queries so they don't get deleted while we insert data
+  std::unique_lock<std::mutex> lck(sq_mutex);
+  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
+    //See if the standing query cares about this expiration
+    sq->expireURI(uri, -1);
+  }
 }
 
 void MysqlWorldModel::deleteURIAttributes(world_model::URI uri, std::vector<world_model::Attribute> entries) {

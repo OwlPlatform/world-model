@@ -59,6 +59,10 @@ class StandingQuery {
     //For attributes remember which of the desired attributes they matched
     std::map<world_model::URI, bool> uri_accepted;
     std::map<world_model::URI, std::set<size_t>> uri_matches;
+    //Remember accepted attributes so that the standing query can notify
+    //the subscriber when identifiers and attributes are expired or deleted
+    //The data_mutex must be locked before modifying this structure
+    std::map<world_model::URI, std::set<std::u16string>> current_matches;
     ///This contains empty sets for entries without matches
     std::map<std::u16string, std::set<size_t>> attribute_accepted;
     world_model::URI uri_pattern;
@@ -131,7 +135,7 @@ class StandingQuery {
      * Return a subset of the world state that would be modified if the
      * supplied URI is expired or deleted.
      */
-    void expireURI(world_model::URI uri);
+    void expireURI(world_model::URI uri, world_model::grail_time);
 
     /**
      * Return a subset of the world state that would be modified if the

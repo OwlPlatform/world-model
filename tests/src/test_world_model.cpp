@@ -240,7 +240,7 @@ bool insertAndRetrieveData(WorldModel& wm) {
           }
           std::cerr<<'\n';
         }
-        else if (found[0].data.size() == attributes1[2].data.size()) {
+        else if (found[0].data.size() != attributes1[2].data.size()) {
           std::cerr<<"Data size doesn't match\n";
         }
         else {
@@ -277,7 +277,7 @@ bool checkStandingQuery(QueryAccessor& qa) {
         if (found[0].name != u"att3") {
           std::cerr<<"Name doesn't match\n";
         }
-        else if (found[0].data.size() == attributes1[2].data.size()) {
+        else if (found[0].data.size() != attributes1[2].data.size()) {
           std::cerr<<"Data size doesn't match\n";
         }
         else {
@@ -315,7 +315,7 @@ bool checkStandingQueryPartial(QueryAccessor& qa) {
         if (found[0].name != u"att3") {
           std::cerr<<"Name doesn't match\n";
         }
-        else if (found[0].data.size() == attributes1[2].data.size()) {
+        else if (found[0].data.size() != attributes1[2].data.size()) {
           std::cerr<<"Data size doesn't match\n";
         }
         else {
@@ -347,11 +347,42 @@ bool checkStandingQueryPartial2(QueryAccessor& qa) {
         if (found[0].name != u"att3") {
           std::cerr<<"Name doesn't match\n";
         }
-        else if (found[0].data.size() == attributes1[2].data.size()) {
+        else if (found[0].data.size() != attributes1[2].data.size()) {
           std::cerr<<"Data size doesn't match\n";
         }
         else {
           std::cerr<<"Data values don't match\n";
+        }
+      }
+      return false;
+    }
+  }
+}
+
+//Should match the results of insertAndRetrieveData, but expire time should be non-zero
+bool checkExpiredStandingQuery(QueryAccessor& qa) {
+
+  WorldModel::world_state ws = qa.getUpdates();
+  if (ws.end() == ws.find(uri1)) {
+    std::cerr<<"Failed checkExpiredStandingQuery: Result empty\n";
+    return false;
+  }
+  else {
+    vector<Attribute> found = ws[uri1];
+    if (found.size() == 1 and
+        found[0].name == u"att3") {
+      if (found[0].expiration_date != 0)
+        return true;
+      else {
+        std::cerr<<"Failed checkExpiredStandingQuery: Attribute was not expired.\n";
+        return false;
+      }
+    }
+    else {
+      std::cerr<<"Found.size is "<<found.size()<<'\n';
+      if (found.size() == 1) {
+        if (found[0].name != u"att3") {
+          std::cerr<<"Failed checkExpiredStandingQuery: Name doesn't match\n";
         }
       }
       return false;
@@ -416,7 +447,6 @@ bool checkStandingQuery2(QueryAccessor& qa) {
   if (ws.end() == ws.find(uri1)) {
     std::cerr<<"Result empty\n";
     return false;
-    return false;
   }
   else {
     vector<Attribute> found = ws[uri1];
@@ -432,7 +462,7 @@ bool checkStandingQuery2(QueryAccessor& qa) {
         if (found[0].name != u"att3") {
           std::cerr<<"Name doesn't match\n";
         }
-        else if (found[0].data.size() == attributes1[2].data.size()) {
+        else if (found[0].data.size() != attributes1[2].data.size()) {
           std::cerr<<"Data size doesn't match\n";
         }
         else {
@@ -546,11 +576,12 @@ bool testHistoricRange(WorldModel& wm) {
 }
 
 //Assumes that URI was inserted
-bool testExpireURI(WorldModel& wm) {
+bool testExpireURI1(WorldModel& wm) {
   wm.expireURI(uri1, 210);
   //Try searching for this URI now
   vector<URI> found = wm.searchURI(u"test.*");
   if (any_of(found.begin(), found.end(), [&](URI& uri) { return uri == uri1;})) {
+    std::cerr<<"testExpireURI still sees uri in searchURI\n";
     return false;
   }
   else {
@@ -558,6 +589,61 @@ bool testExpireURI(WorldModel& wm) {
     vector<u16string> search_atts{u"att3"};
     WorldModel::world_state ws = wm.historicSnapshot(uri1, search_atts, 0, 200);
     if (ws.end() == ws.find(uri1)) {
+      std::cerr<<"testExpireURI did not see uri in historicSnapshot\n";
+      return false;
+    }
+    else {
+      vector<Attribute> found = ws[uri1];
+      if (found.size() == 1 and
+          found[0].name == u"att3" and
+          found[0].data.size() == attributes1[2].data.size() and
+          equal(found[0].data.begin(), found[0].data.end(), attributes1[2].data.begin())) {
+        return true;
+      }
+      else {
+        std::cerr<<"testExpireURI did not see matching data in the historicSnapshot\n";
+        std::cerr<<"Found.size is "<<found.size()<<'\n';
+        if (found.size() == 1) {
+          if (found[0].name != u"att3") {
+            std::cerr<<"Name doesn't match\n";
+            std::cerr<<"Bytes are:\n\t";
+            for (char16_t c : found[0].name) {
+              std::cerr<<(uint32_t)c<<'\t';
+            }
+            std::cerr<<'\n';
+          }
+          else if (found[0].data.size() != attributes1[2].data.size()) {
+            std::cerr<<"Data size doesn't match ("<<found[0].data.size()<<" instead of "<<attributes1[2].data.size()<<")\n";
+          }
+          else {
+            std::string data1 = std::accumulate(found[0].data.begin(), found[0].data.end(), std::string(""), [&](std::string s, uint8_t d) {
+                return s + std::string(":") + std::to_string(d);});
+            std::string data2 = std::accumulate(attributes1[2].data.begin(), attributes1[2].data.end(), std::string(""), [&](std::string s, uint8_t d) {
+                return s + std::string(":") + std::to_string(d);});
+            std::cerr<<"Data values don't match ("<<data1<<" instead of "<<data2<<")\n";
+          }
+        }
+        return false;
+      }
+    }
+  }
+}
+
+//Assumes that URI was inserted
+bool testExpireURI(WorldModel& wm) {
+  wm.expireURI(uri1, 210);
+  //Try searching for this URI now
+  vector<URI> found = wm.searchURI(u"test.*");
+  if (any_of(found.begin(), found.end(), [&](URI& uri) { return uri == uri1;})) {
+    std::cerr<<"testExpireURI still sees uri in searchURI\n";
+    return false;
+  }
+  else {
+    //Now check that a historic query still finds the URI
+    vector<u16string> search_atts{u"att3"};
+    WorldModel::world_state ws = wm.historicSnapshot(uri1, search_atts, 0, 200);
+    if (ws.end() == ws.find(uri1)) {
+      std::cerr<<"testExpireURI did not see uri in historicSnapshot\n";
       return false;
     }
     else {
@@ -569,6 +655,28 @@ bool testExpireURI(WorldModel& wm) {
         return true;
       }
       else {
+        std::cerr<<"testExpireURI did not see matching data in the historicSnapshot\n";
+        std::cerr<<"Found.size is "<<found.size()<<'\n';
+        if (found.size() == 1) {
+          if (found[0].name != u"att3") {
+            std::cerr<<"Name doesn't match\n";
+            std::cerr<<"Bytes are:\n\t";
+            for (char16_t c : found[0].name) {
+              std::cerr<<(uint32_t)c<<'\t';
+            }
+            std::cerr<<'\n';
+          }
+          else if (found[0].data.size() != attributes2[2].data.size()) {
+            std::cerr<<"Data size doesn't match ("<<found[0].data.size()<<" instead of "<<attributes2[2].data.size()<<")\n";
+          }
+          else {
+            std::string data1 = std::accumulate(found[0].data.begin(), found[0].data.end(), std::string(""), [&](std::string s, uint8_t d) {
+                return s + std::string(":") + std::to_string(d);});
+            std::string data2 = std::accumulate(attributes2[2].data.begin(), attributes2[2].data.end(), std::string(""), [&](std::string s, uint8_t d) {
+                return s + std::string(":") + std::to_string(d);});
+            std::cerr<<"Data values don't match ("<<data1<<" instead of "<<data2<<")\n";
+          }
+        }
         return false;
       }
     }
@@ -1249,6 +1357,53 @@ int main(int argc, char** argv) {
     delete wm;
   }
 
+  //Test that standing queries will get an update when a match is expired
+  cerr<<"Testing that standing queries find update when items are expired...\t";
+  {
+    WorldModel* wm = makeWM(makeFilename());
+    vector<u16string> search_atts{u"att3"};
+    {
+      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      //TODO FIXME
+      if (createAndSearchURIs(*wm) and
+          insertAndRetrieveData(*wm) and
+          checkStandingQuery(qa) and
+          testExpireURI1(*wm) and
+          checkExpiredStandingQuery(qa)) {
+        cerr<<"Pass\n";
+      }
+      else {
+        cerr<<"Fail\n";
+      }
+    }
+    
+    delete wm;
+  }
+
+  //Test that standing queries will get an update when a match is deleted
+  cerr<<"Testing that standing queries find update when items are deleted...\t";
+  {
+    WorldModel* wm = makeWM(makeFilename());
+    vector<u16string> search_atts{u"att3"};
+    {
+      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      //TODO FIXME
+      if (createAndSearchURIs(*wm) and
+          insertAndRetrieveData(*wm) and
+          checkStandingQuery(qa) and
+          testDeleteURI(*wm) and
+          checkExpiredStandingQuery(qa)) {
+        cerr<<"Pass\n";
+      }
+      else {
+        cerr<<"Fail\n";
+      }
+    }
+    
+    delete wm;
+  }
+
+  /*
   //Test multiple threads inserting values
   cerr<<"Testing threaded insertion...\t";
   {
@@ -1301,6 +1456,7 @@ int main(int argc, char** argv) {
     }
     delete wm;
   }
+  */
 
   return 0;
 }
