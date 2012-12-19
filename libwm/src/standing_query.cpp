@@ -27,8 +27,6 @@
 #include <string>
 #include <utility>
 
-#include <iostream>
-
 #include <standing_query.hpp>
 
 using std::u16string;
@@ -431,7 +429,7 @@ void StandingQuery::expireURI(world_model::URI uri, world_model::grail_time expi
 }
 
 void StandingQuery::expireURIAttributes(world_model::URI uri,
-    const std::vector<world_model::Attribute>& entries) {
+    const std::vector<world_model::Attribute>& entries, world_model::grail_time expires) {
   using world_model::Attribute;
   std::set<std::pair<u16string, u16string>> is_expired;
   std::for_each(entries.begin(), entries.end(), [&](const Attribute& a) {
@@ -456,12 +454,21 @@ void StandingQuery::expireURIAttributes(world_model::URI uri,
             [&](const Attribute& attr) { return attr.name == name;});};
       std::for_each(state->second.begin(), state->second.end(), [&](Attribute& attr) {
           if (tbd(attr.name)) {
-std::cerr<<"Trying to set expiration date of attributes "<<std::string(attr.name.begin(), attr.name.end())<<"\n";
-            //TODO FIXME Maybe the expire and delete should be different function
-            //calls so that the true expiration date can be represented during expiration?
-            //TODO FIXME HERE set expired attributes to expired
-            attr.expiration_date = attr.creation_date;
+            //Set expired attributes to expired
+            attr.expiration_date = expires;
+            //Remove the attribute from the current matches set
+            current_matches[uri].erase(attr.name);
           }});
+    }
+    //If the current state does not have values for some attributes that were
+    //previously sent then make sure to expire these as well
+    if (current_matches.end() != current_matches.find(uri)) {
+      std::set<std::u16string>& attr_names = current_matches[uri];
+      for (const std::u16string& attr_name : attr_names) {
+        //Push an attribute with the expired attribute's name and no data
+        cur_state[uri].push_back(world_model::Attribute{attr_name, expires, expires, u"", {}});
+      }
+      current_matches.erase(uri);
     }
   }
 }

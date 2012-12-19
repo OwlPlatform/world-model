@@ -142,7 +142,8 @@ class StandingQuery {
      * supplied URI attributes are expired or deleted.
      */
     void expireURIAttributes(world_model::URI uri,
-        const std::vector<world_model::Attribute>& entries);
+        const std::vector<world_model::Attribute>& entries,
+        world_model::grail_time);
 
     /**
      * Insert data in a thread safe way

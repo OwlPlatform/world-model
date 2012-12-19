@@ -930,7 +930,7 @@ void MysqlWorldModel::expireURIAttributes(world_model::URI uri, std::vector<worl
   std::unique_lock<std::mutex> lck(sq_mutex);
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
     //See if the standing query cares about this expiration
-    sq->expireURIAttributes(uri, entries);
+    sq->expireURIAttributes(uri, entries, expires);
   }
 }
 
@@ -1007,7 +1007,7 @@ void MysqlWorldModel::deleteURIAttributes(world_model::URI uri, std::vector<worl
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
     //See if the standing query cares about this deletion
     //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURIAttributes(uri, entries);
+    sq->expireURIAttributes(uri, entries, -1);
   }
 }
 
@@ -1288,7 +1288,6 @@ WorldModel::world_state MysqlWorldModel::fetchWorldData(MYSQL_STMT* stmt, MYSQL*
   //MYSQL_NO_DATA if there are no more rows to fetch, and 1 if an error occurred.
   //After a successful fetch, the column values are available in the MYSQL_BIND
   //structures bound to the result.
-  int status = 0;
   int num_rows = 0;
   while (0 == (mysql_stmt_fetch(stmt))) {
     ++num_rows;

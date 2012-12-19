@@ -188,7 +188,7 @@ void SQLite3WorldModel::databaseStore(world_model::URI uri, std::vector<world_mo
 }
 
 //Callback for a sqlite3 query.
-int existCallback(void* found, int n_col, char** entries, char** col_names) {
+int existCallback(void* found, int /*n_col*/, char** /*entries*/, char** /*col_names*/) {
   *(bool *)found = true;
   return 0;
 }
@@ -670,7 +670,7 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
   std::unique_lock<std::mutex> lck(sq_mutex);
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
     //See if the standing query cares about this expiration
-    sq->expireURIAttributes(uri, entries);
+    sq->expireURIAttributes(uri, entries, expires);
   }
 }
 
@@ -812,7 +812,7 @@ void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<wo
   for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
     //See if the standing query cares about this deletion
     //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURIAttributes(uri, entries);
+    sq->expireURIAttributes(uri, entries, -1);
   }
 }
 
