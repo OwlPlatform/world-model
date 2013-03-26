@@ -567,8 +567,12 @@ class ClientConnection : public ThreadConnection {
               uint32_t ticket;
               std::tie(request, ticket) = client::decodeStreamRequest(raw_message);
               //Remove any existing requests with this ticket number
-              streaming_requests.erase(std::remove_if(streaming_requests.begin(), streaming_requests.end(),
-                  [&](RequestState& rs) {return rs.ticket_number == ticket;}), streaming_requests.end());
+              {
+                std::unique_lock<std::mutex> stream_lock(stream_request_mutex);
+                //TODO FIXME This does not properly update request counts for different attributes.
+                streaming_requests.erase(std::remove_if(streaming_requests.begin(), streaming_requests.end(),
+                      [&](RequestState& rs) {return rs.ticket_number == ticket;}), streaming_requests.end());
+              }
               //Create a new request state to handle this new stream request.
               std::cerr<<"In world model server period is "<<request.stop_period<<'\n';
               RequestState rs(request.stop_period, request.object_uri,
@@ -624,6 +628,8 @@ class ClientConnection : public ThreadConnection {
               uint32_t ticket = client::decodeCancelRequest(raw_message);
               debug<<"Received a cancel request\n";
               //Cancel the stream corresponding to this request number.
+              //Lock the stream request list first.
+              std::unique_lock<std::mutex> stream_lock(stream_request_mutex);
               for (auto I = streaming_requests.begin(); I != streaming_requests.end(); ++I) {
                 if (I->ticket_number == ticket) {
                   auto sr = std::find_if(streaming_requests.begin(), streaming_requests.end(),
@@ -651,7 +657,7 @@ class ClientConnection : public ThreadConnection {
                         }
 
                         //Mark this as not requested by erasing one entry of
-                        //the search URI from the rquested on demands map
+                        //the search URI from the requested on demands map
                         rod.erase(rod.find(sr->search_uri));
                       }
                     }
