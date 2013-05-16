@@ -11,9 +11,9 @@ Dependencies
 
   There are additional dependencies depending upon which database backend you want to you use.
 
-##for SQLite World Model##
+###for SQLite World Model###
   You will require libsqlite3
-##for MySQL/MariaDB World Model##
+###for MySQL/MariaDB World Model###
   You will require libmysqlclient, libssl, librt, and libz.
 
 Building
@@ -30,8 +30,8 @@ Building
 
   If you want to build an individual world model then run
 
-##for SQLite World Model##
+###for SQLite World Model###
     make bin/sqlite3_world_model_server
-##for MySQL/MariaDB World Model##
+###for MySQL/MariaDB World Model###
     make bin/mysql_world_model_server
 
