@@ -8,9 +8,6 @@ set (LibOwlWM_VERSION_REVISION 0)
 
 #Use optimization level three for the world model libraries
 set(CMAKE_CXX_FLAGS "-O3 -std=c++0x -Wall -Wextra -Wno-sign-compare")
-#set(SQLITE_FLAGS " -lpthread -lsqlite3 -ldl")
-#set(MYSQL_FLAGS " -DUSE_MYSQL -lpthread -lmysqlclient_r -ldl -lz -lssl -lrt")
-#set(CMAKE_CXX_FLAGS "${BASE_CXX_FLAGS}")
 
 FIND_PATH(OWL_INC_DIR NAMES owl PATHS /usr/include /usr/local/include)
 IF(NOT OWL_INC_DIR)
