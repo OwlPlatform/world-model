@@ -31,7 +31,7 @@ Building
   If you want to build an individual world model then run
 
 ###for SQLite World Model###
-    make bin/sqlite3_world_model_server
+    make sqlite3_world_model_server
 ###for MySQL/MariaDB World Model###
-    make bin/mysql_world_model_server
+    make mysql_world_model_server
 

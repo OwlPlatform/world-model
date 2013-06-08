@@ -16,6 +16,6 @@ target_link_libraries (mysql_world_model_server owl-common owlwm mysqlwm mysqlcl
 #set_target_properties(mysql_world_model_server PROPERTIES COMPILE_FLAGS "${MSQYL_FLAGS}")
 set_target_properties(mysql_world_model_server PROPERTIES COMPILE_DEFINITIONS "USE_MYSQL")
 
-INSTALL(TARGETS sqlite3_world_model_server RUNTIME DESTINATION bin/owl)
-INSTALL(TARGETS mysql_world_model_server RUNTIME DESTINATION bin/owl)
+INSTALL(TARGETS sqlite3_world_model_server RUNTIME DESTINATION bin/owl OPTIONAL)
+INSTALL(TARGETS mysql_world_model_server RUNTIME DESTINATION bin/owl OPTIONAL)
 

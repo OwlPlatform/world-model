@@ -27,6 +27,9 @@ add_subdirectory (implementations)
 add_subdirectory (wmserver bin)
 add_subdirectory (tests/src tests/bin)
 
+#Let the user choose which implementations to build
+SET(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY TRUE)
+
 #Set the correct library directory suffix
 if(NOT DEFINED LIB_SUFFIX)
   get_property(LIB64 GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS)
