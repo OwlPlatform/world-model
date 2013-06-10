@@ -42,7 +42,7 @@
 #include "semaphore.hpp"
 #include "standing_query.hpp"
 
-///Representation of storage and search functionality for the Octopus world model
+///Representation of storage and search functionality for the world model
 class WorldModel {
   public:
     friend class QueryAccessor;
