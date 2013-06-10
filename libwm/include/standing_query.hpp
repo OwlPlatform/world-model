@@ -36,10 +36,8 @@
 
 #include <owl/world_model_protocol.hpp>
 
-//TODO In the future C++11 support for regex should be used over these POSIX
-//regex c headers.
-#include <sys/types.h>
-#include <regex.h>
+//Using boost regex support until the std::regex of C++11 is broadly supported.
+#include <boost/regex.hpp>
 
 /**
  * Standing queries are used when the same query would be repeated many times.
@@ -67,10 +65,9 @@ class StandingQuery {
     std::map<std::u16string, std::set<size_t>> attribute_accepted;
     world_model::URI uri_pattern;
     std::vector<std::u16string> desired_attributes;
-    regex_t uri_regex;
-    std::map<std::u16string, regex_t> attr_regex;
+    boost::regex uri_regex;
+    std::map<std::u16string, boost::regex> attr_regex;
     bool get_data;
-    bool regex_valid;
 
     ///Mutex for the origin_attributes map
     static std::mutex origin_attr_mutex;

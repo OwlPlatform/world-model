@@ -4,10 +4,10 @@ SET(SourceFiles
 )
 
 add_executable (sqlite3_world_model_server ${SourceFiles})
-target_link_libraries (sqlite3_world_model_server owl-common owlwm sqlite3wm sqlite3)
+target_link_libraries (sqlite3_world_model_server owl-common owlwm boost_system boost_regex sqlite3wm sqlite3)
 
 add_executable (mysql_world_model_server ${SourceFiles})
-target_link_libraries (mysql_world_model_server owl-common owlwm mysqlwm mysqlclient_r ssl rt z)
+target_link_libraries (mysql_world_model_server owl-common owlwm boost_system boost_regex mysqlwm mysqlclient_r ssl rt z)
 
 #set(SQLITE_FLAGS " -lpthread -lsqlite3 -ldl")
 #set(MYSQL_FLAGS " -lpthread -lmysqlclient_r -ldl -lz -lssl -lrt")

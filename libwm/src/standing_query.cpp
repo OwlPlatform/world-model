@@ -43,50 +43,27 @@ void StandingQuery::addOriginAttributes(std::u16string& origin, std::set<std::u1
 
 StandingQuery::StandingQuery(const world_model::URI& uri, const std::vector<std::u16string>& desired_attributes,
     bool get_data) : uri_pattern(uri), desired_attributes(desired_attributes), get_data(get_data) {
-  //Set this to true only after all regex patterns have compiled
-  regex_valid = false;
+  //Compile and save the regex patterns for quick matching.
   std::string u8_pattern(uri_pattern.begin(), uri_pattern.end());
-  int err = regcomp(&uri_regex, u8_pattern.c_str(), REG_EXTENDED);
-  if (0 != err) {
-    return;
-  }
+  uri_regex = boost::regex(u8_pattern, boost::regex::extended);
+
   for (auto I = desired_attributes.begin(); I != desired_attributes.end(); ++I) {
-    regex_t re;
     std::string u8_attr_pattern(I->begin(), I->end());
-    int err = regcomp(&re, u8_attr_pattern.c_str(), REG_EXTENDED);
-    if (0 != err) {
-      regfree(&uri_regex);
-      for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
-        regfree(&(J->second));
-      }
-      return;
-    }
-    else {
-      attr_regex[*I] = re;
-    }
+    attr_regex[*I] = boost::regex(u8_attr_pattern, boost::regex::extended);
   }
-  regex_valid = true;
 }
 
-///Free memory from regular expressions
+///Query ends -- cleanup is elsewhere
 StandingQuery::~StandingQuery() {
-  if (regex_valid) {
-    regfree(&uri_regex);
-    for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
-      regfree(&(J->second));
-    }
-  }
 }
 
 ///r-value copy constructor
 StandingQuery::StandingQuery(StandingQuery&& other) {
   uri_pattern = other.uri_pattern;
   desired_attributes = other.desired_attributes;
-  regex_valid = other.regex_valid;
-  std::swap(uri_regex, other.uri_regex);
+  uri_regex = other.uri_regex;
   attr_regex = other.attr_regex;
   other.attr_regex.clear();
-  other.regex_valid = false;
   get_data = other.get_data;
 }
 
@@ -94,11 +71,9 @@ StandingQuery::StandingQuery(StandingQuery&& other) {
 StandingQuery& StandingQuery::operator=(StandingQuery&& other) {
   uri_pattern = other.uri_pattern;
   desired_attributes = other.desired_attributes;
-  regex_valid = other.regex_valid;
-  std::swap(uri_regex, other.uri_regex);
+  uri_regex = other.uri_regex;
   attr_regex = other.attr_regex;
   other.attr_regex.clear();
-  other.regex_valid = false;
   get_data = other.get_data;
   return *this;
 }
@@ -133,10 +108,8 @@ bool StandingQuery::interestingOrigin(std::u16string& origin) {
       std::string name_str = std::string(attr.begin(), attr.end());
       for (size_t search_ind = 0; search_ind < desired_attributes.size(); ++search_ind) {
         //Use regex matching
-        regmatch_t pmatch;
-        int match = regexec(&attr_regex[desired_attributes[search_ind]],
-            name_str.c_str(), 1, &pmatch, 0);
-        if (0 == match and 0 == pmatch.rm_so and name_str.size() == pmatch.rm_eo) {
+        boost::regex& exp = attr_regex[desired_attributes[search_ind]];
+        if (regex_match(name_str, exp)) {
           //Remember that this attribute was matched
           patt_match.insert(search_ind);
         }
@@ -193,10 +166,8 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
     }
     //Do a regex and update uri_accepted if no cached result was found
     else {
-      regmatch_t pmatch;
       std::string search_id(I->first.begin(), I->first.end());
-      int match = regexec(&uri_regex, search_id.c_str(), 1, &pmatch, 0);
-      if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
+      if (boost::regex_match(search_id, uri_regex)) {
         uri_accepted[I->first] = true;
         {
           std::unique_lock<std::mutex> lck(data_mutex);
@@ -233,10 +204,8 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
         std::string name_str = std::string(I->name.begin(), I->name.end());
         for (size_t search_ind = 0; search_ind < desired_attributes.size(); ++search_ind) {
           //Use regex matching
-          regmatch_t pmatch;
-          int match = regexec(&attr_regex[desired_attributes[search_ind]],
-              name_str.c_str(), 1, &pmatch, 0);
-          if (0 == match and 0 == pmatch.rm_so and name_str.size() == pmatch.rm_eo) {
+          boost::regex& reg = attr_regex[desired_attributes[search_ind]];
+          if (boost::regex_match(name_str, reg)) {
             //Remember that this attribute was matched
             patt_match.insert(search_ind);
             //Remember that this index was matched
@@ -318,10 +287,8 @@ StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& w
     }
     //Do a regex and update uri_accepted if no cached result was found
     else {
-      regmatch_t pmatch;
       std::string search_id(I->first.begin(), I->first.end());
-      int match = regexec(&uri_regex, search_id.c_str(), 1, &pmatch, 0);
-      if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
+      if (boost::regex_match(search_id, uri_regex)) {
         uri_accepted[I->first] = true;
         {
           std::unique_lock<std::mutex> lck(data_mutex);
