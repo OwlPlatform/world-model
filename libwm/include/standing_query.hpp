@@ -36,6 +36,9 @@
 
 #include <owl/world_model_protocol.hpp>
 
+//Lock-free queue for pushing and consuming data
+#include <boost/lockfree/queue.hpp>
+
 //TODO In the future C++11 support for regex should be used over these POSIX
 //regex c headers.
 #include <sys/types.h>
@@ -157,8 +160,15 @@ class StandingQuery {
     world_state getData();
 };
 
+//TODO Merge into standing query class, make standing query functions static
 class QueryAccessor {
   private:
+    ///Incoming data from solvers, disseminated by the pushThread function
+    static boost::lockfree::queue<world_state> incoming_data;
+
+    std::mutex subscription_mutex;
+    static std::set<QueryAccessor*> subscriptions;
+
     /**
      * Need to remember the source list to remove the iterator
      * when this object is destroyed.
@@ -181,10 +191,14 @@ class QueryAccessor {
      */
     StandingQuery::world_state getUpdates();
 
-    QueryAccessor(std::list<StandingQuery>* source, std::mutex* list_mutex,
-        std::list<StandingQuery>::iterator data);
+    /**
+     * TODO Create a new standing query, adding itself to the list of
+     * subscriptions.
+     */
+    QueryAccessor(const world_model::URI& uri,
+        const std::vector<std::u16string>& desired_attributes, bool get_data = true);
 
-    ///Remove the iterator from the source list.
+    ///Remove this accessor from the subscription list
     ~QueryAccessor();
 
     ///r-value copy constructor
@@ -192,6 +206,29 @@ class QueryAccessor {
 
     ///r-value assignment
     QueryAccessor& operator=(QueryAccessor&& other);
+
+    /**
+     * Function that moves incoming data to the queues of class instances
+     * from the incoming data queue.
+     */ 
+    static void pushThread();
+
+    /**
+     * Expire the supplied URI at the given time.
+     */
+    static bool expireURI(world_model::URI uri, world_model::grail_time);
+
+    /**
+     * Expire the given URI's specified attributes at the given time.
+     */
+    static bool expireURIAttributes(world_model::URI uri,
+        const std::vector<world_model::Attribute>& entries,
+        world_model::grail_time);
+
+    /**
+     * Push new data from a solver to any interested standing queries.
+     */
+    static bool pushData(world_state& ws);
 };
 
 #endif //ifndef __STANDING_QUERY_HPP__
