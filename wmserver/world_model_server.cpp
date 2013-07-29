@@ -316,6 +316,7 @@ class ClientConnection : public ThreadConnection {
         streaming_thread.join();
       }
       --total_connections;
+      std::cerr<<"Client connection closed. ("<<total_connections<<" connections remaining)\n";
     }
 
     //Interrupt this thread and cause it to stop.
@@ -731,6 +732,7 @@ class SolverConnection : public ThreadConnection {
     ~SolverConnection() {
       std::cerr<<"Solver connection closing.\n";
       --total_connections;
+      std::cerr<<"Solver connection closed. ("<<SolverConnection::total_connections<<" connections remaining)\n";
     }
 
     //Interrupt this thread and cause it to stop.
