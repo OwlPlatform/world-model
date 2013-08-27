@@ -143,16 +143,16 @@ class ClientConnection : public ThreadConnection {
       std::vector<u16string> desired_attributes;
       WorldModel::world_state last_state;
       uint32_t ticket_number;
-      //Standy query data accessor
-      QueryAccessor qa;
-      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, QueryAccessor&& qa) : qa(std::move(qa)) {
+      //Standing query for streaming requests
+      StandingQuery sq;
+      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, StandingQuery&& sq) : sq(std::move(sq)) {
         interval = interval;
         search_uri = uri;
         desired_attributes = attributes;
         ticket_number = ticket;
         last_serviced = 0;
       }
-      RequestState(RequestState&& other) : qa(std::move(other.qa)) {
+      RequestState(RequestState&& other) : sq(std::move(other.sq)) {
         last_serviced = other.last_serviced;
         interval = other.interval;
         search_uri = other.search_uri;
@@ -161,7 +161,7 @@ class ClientConnection : public ThreadConnection {
         ticket_number = other.ticket_number;
       }
       RequestState& operator=(RequestState&& other) {
-        qa = std::move(other.qa);
+        sq = std::move(other.sq);
         last_serviced = other.last_serviced;
         interval = other.interval;
         search_uri = other.search_uri;
@@ -434,7 +434,7 @@ class ClientConnection : public ThreadConnection {
     //the aliased world data that should be sent to the client to represent
     //the changes in the world model.
     vector<AliasedWorldData> updateStreamRequest(RequestState& rs) {
-      WorldModel::world_state changed = rs.qa.getUpdates();
+      WorldModel::world_state changed = rs.sq.getData();
       //Apply user-supplied preference levels here
       applyOriginPreferences(changed);
       rs.last_serviced = getGRAILTime();

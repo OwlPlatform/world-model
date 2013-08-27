@@ -151,9 +151,9 @@ class SQLite3WorldModel : public WorldModel {
      * Afterwards any updates that arrive that match the query criteria are
      * added into the standing query.
      */
-    QueryAccessor requestStandingQuery(const world_model::URI& uri,
-                                       std::vector<std::u16string>& desired_attributes,
-                                       bool get_data = true);
+		StandingQuery&& requestStandingQuery(const world_model::URI& uri,
+				std::vector<std::u16string>& desired_attributes,
+				bool get_data = true);
 };
 
 #endif

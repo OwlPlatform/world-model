@@ -56,7 +56,7 @@ class ThreadsafeSet {
 
 		size_t erase(const T& value) {
 			std::unique_lock<std::mutex> lck(_access);
-			_set.erase(value);
+			return _set.erase(value);
 		}
 
 		template<class UnaryFunction>

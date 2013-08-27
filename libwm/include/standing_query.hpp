@@ -28,18 +28,18 @@
 
 #include <algorithm>
 #include <list>
+#include <functional>
 #include <map>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <threadsafe_set.hpp>
 
 #include <owl/world_model_protocol.hpp>
-
-//Lock-free queue for pushing and consuming data
-#include <boost/lockfree/queue.hpp>
 
 //TODO In the future C++11 support for regex should be used over these POSIX
 //regex c headers.
@@ -55,7 +55,8 @@ class StandingQuery {
 		 **************************************************************************/
 
 		//Input/output queue. Input from solver threads, output to standing query thread
-    static boost::lockfree::queue<WorldState> solver_data;
+		static std::mutex solver_data_mutex;
+    static std::queue<WorldState> solver_data;
 
 		/**
 		 * Loop that moves data from the internal data queue to interested client
@@ -146,9 +147,7 @@ class StandingQuery {
      */
 		//static void pushData(WorldState& ws);
 
-
-		template<class UnaryFunction>
-		static void for_each(UnaryFunction f);
+		static void for_each(std::function<void(StandingQuery*)> f);
 
 		/**
 		 * Create a new standing query, initializing internal regex code and adding
@@ -229,7 +228,7 @@ class StandingQuery {
      * or with the showInterested function call.
      */
     void insertData(WorldState& ws);
-}
+};
 
 #endif //ifndef __STANDING_QUERY_HPP__
 

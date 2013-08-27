@@ -35,7 +35,8 @@ using world_model::WorldState;
 
 
 //Input/output queue. Input from solver threads, output to standing query thread
-boost::lockfree::queue<WorldState> StandingQuery::solver_data;
+std::mutex StandingQuery::solver_data_mutex;
+std::queue<WorldState> StandingQuery::solver_data;
 
 //Thread that runs the dataProcessingLoop.
 std::thread StandingQuery::data_processing_thread;
@@ -81,8 +82,7 @@ void StandingQuery::addOriginAttributes(std::u16string& origin, std::set<std::u1
   origin_attributes[origin].insert(attributes.begin(), attributes.end());
 }
 
-template<class UnaryFunction>
-static void StandingQuery::for_each(UnaryFunction f) {
+void StandingQuery::for_each(std::function<void(StandingQuery*)> f) {
 	subscriptions.for_each(f);
 }
 
