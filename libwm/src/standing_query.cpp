@@ -23,6 +23,7 @@
  * queries.
  ******************************************************************************/
 
+#include <iostream>
 #include <set>
 #include <string>
 #include <utility>
@@ -40,6 +41,9 @@ std::queue<WorldState> StandingQuery::solver_data;
 
 //Thread that runs the dataProcessingLoop.
 std::thread StandingQuery::data_processing_thread;
+
+///Mutex that ensures that only one data_processing_thread runs.
+std::mutex StandingQuery::data_processing_mutex;
 
 /**
  * The set of all current standing queries, used to find all of the
@@ -68,13 +72,81 @@ std::mutex StandingQuery::origin_attr_mutex;
  * threads.
  */
 void StandingQuery::dataProcessingLoop() {
-	//TODO Attempt to lock a mutex to ensure a single dataProcessingLoop
+	bool running = true;
+	static timespec sleep_interval;
+	sleep_interval.tv_sec = 0;
+	//Sleep for 5 milliseconds by default, tune according to the rate of new data.
+	sleep_interval.tv_nsec = 5000000;
 
-	//TODO Move data from @solver_data into individual queries.
-  //TODO If there is no more data then sleep for a brief period
-  //TODO If there has not been any new data for a long period of time exit the loop
+	try {
+		while (running) {
+			//TODO Put in a timer and fail with an error after too long?
+			solver_data_mutex.lock();
+			if (not solver_data.empty()) {
+				//TODO Move data from @solver_data into individual queries.
+				//TODO If there is no more data then sleep for a brief period
+				//TODO If there has not been any new data for a long period of time exit the loop
+				WorldState data;
 
-  //TODO Release the mutex so that another dataProcessingLoop thread can spawn
+				auto push = [&](StandingQuery* sq) {
+					//First see what items are of interest. This also tells the standing
+					//query to remember partial matches so we do not need to keep feeding
+					//it the current state, only the updates.
+					auto ws = sq->showInterested(data);
+					//Insert the data.
+					if (not ws.empty()) {
+						sq->insertData(ws);
+					}
+					/* TODO FIXME Handle transients in the queue -- have a separate transient queue?
+					//Insert transients separately from normal data to enforce exact string matching
+					ws = sq->showInterestedTransient(transients);
+					if (not ws.empty()) {
+						sq->insertData(ws);
+					}
+					*/
+				};
+				while (not solver_data.empty()) {
+					data = solver_data.front();
+					solver_data.pop();
+					StandingQuery::for_each(push);
+				}
+				solver_data_mutex.unlock();
+			}
+			else {
+				solver_data_mutex.unlock();
+				timespec remaining;
+				nanosleep(&sleep_interval, &remaining);
+				//TODO See if sleep was interrupted
+				//TODO Tune the sleep interval to anticipate data arrival
+			}
+		}
+	}
+	catch (std::exception err) {
+		std::cerr<<"Error in streaming data thread: "<<err.what()<<'\n';
+	}
+
+	//Unlock the mutex so that a new data processing thread can spawn.
+	data_processing_mutex.unlock();
+}
+
+/**
+ * Offer data from the input queue for every StandingQuery
+ */
+void StandingQuery::offerData(WorldState& ws) {
+	//TODO Put in a timer and fail with an error after too long?
+	{
+		std::unique_lock<std::mutex> lck(solver_data_mutex);
+		solver_data.push(ws);
+	}
+	//Spawn the dataProcessingLoop thread if it is not running
+	{
+		if (data_processing_mutex.try_lock()) {
+			//The data processing thread will unlock the mutex at exit, allowing a
+			//new thread to spawn if it exits.
+			data_processing_thread = std::thread(dataProcessingLoop);
+			data_processing_thread.detach();
+		}
+	}
 }
 
 void StandingQuery::addOriginAttributes(std::u16string& origin, std::set<std::u16string>& attributes) {
@@ -134,43 +206,94 @@ StandingQuery::~StandingQuery() {
   subscriptions.erase(this);
 }
 
-///r-value copy constructor
-StandingQuery::StandingQuery(StandingQuery&& other) {
+///Copy constructor
+StandingQuery::StandingQuery(const StandingQuery& other) {
   uri_pattern = other.uri_pattern;
   desired_attributes = other.desired_attributes;
-  regex_valid = other.regex_valid;
-  std::swap(uri_regex, other.uri_regex);
-  attr_regex = other.attr_regex;
-  other.attr_regex.clear();
-  other.regex_valid = false;
+
+	//Set this to true only after all regex patterns have compiled
+	std::string u8_pattern(uri_pattern.begin(), uri_pattern.end());
+	int err = regcomp(&uri_regex, u8_pattern.c_str(), REG_EXTENDED);
+	if (0 != err) {
+		return;
+	}
+	for (auto I = desired_attributes.begin(); I != desired_attributes.end(); ++I) {
+		regex_t re;
+		std::string u8_attr_pattern(I->begin(), I->end());
+		int err = regcomp(&re, u8_attr_pattern.c_str(), REG_EXTENDED);
+		if (0 != err) {
+			regfree(&uri_regex);
+			for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
+				regfree(&(J->second));
+			}
+			return;
+		}
+		else {
+			attr_regex[*I] = re;
+		}
+	}
+	regex_valid = true;
+
   get_data = other.get_data;
-	//Copying this data directly is safe because this object is not yet in the
-	//subscriptions list and the other object is removed from it.
-	cur_state = other.cur_state;
-	partial = other.partial;
+
+	//Lock other query and copy its data
+	{
+		//TODO FIXME Is this lock required? Can't do it in a const constructor
+		//std::unique_lock<std::mutex> lck(other.data_mutex);
+		cur_state = other.cur_state;
+		partial = other.partial;
+	}
   //Add this standing query into the subscriptions set so that it receives
   //updates from the @data_processing_thread
   subscriptions.insert(this);
 }
 
-///r-value assignment
-StandingQuery& StandingQuery::operator=(StandingQuery&& other) {
+///Assignment
+StandingQuery& StandingQuery::operator=(const StandingQuery& other) {
+	//Clear old regex if there was one
+  if (regex_valid) {
+    regfree(&uri_regex);
+    for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
+      regfree(&(J->second));
+    }
+  }
   uri_pattern = other.uri_pattern;
   desired_attributes = other.desired_attributes;
-  regex_valid = other.regex_valid;
-  std::swap(uri_regex, other.uri_regex);
-  attr_regex = other.attr_regex;
-  other.attr_regex.clear();
-  other.regex_valid = false;
+
+	//Set this to true only after all regex patterns have compiled
+	regex_valid = false;
+	std::string u8_pattern(uri_pattern.begin(), uri_pattern.end());
+	int err = regcomp(&uri_regex, u8_pattern.c_str(), REG_EXTENDED);
+	if (0 != err) {
+		return *this;
+	}
+	for (auto I = desired_attributes.begin(); I != desired_attributes.end(); ++I) {
+		regex_t re;
+		std::string u8_attr_pattern(I->begin(), I->end());
+		int err = regcomp(&re, u8_attr_pattern.c_str(), REG_EXTENDED);
+		if (0 != err) {
+			regfree(&uri_regex);
+			for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
+				regfree(&(J->second));
+			}
+			return *this;
+		}
+		else {
+			attr_regex[*I] = re;
+		}
+	}
+	regex_valid = true;
+
   get_data = other.get_data;
-	//Copying this data directly is safe because this object is not yet in the
-	//subscriptions list and the other object is removed from it.
-	cur_state = other.cur_state;
-	partial = other.partial;
-  //Add this standing query into the subscriptions set so that it receives
-  //updates from the @data_processing_thread
-  subscriptions.insert(this);
-  return *this;
+
+	//Lock other query and copy its data
+	{
+		//TODO FIXME Is this lock required? Can't do it in a const constructor
+		//std::unique_lock<std::mutex> lck(other.data_mutex);
+		cur_state = other.cur_state;
+		partial = other.partial;
+	}
+	return *this;
 }
 
 /**
@@ -546,33 +669,26 @@ void StandingQuery::expireURIAttributes(world_model::URI uri,
 ///Insert data in a thread safe way
 void StandingQuery::insertData(WorldState& ws) {
   std::unique_lock<std::mutex> lck(data_mutex);
-  //std::cerr<<"AAAAAAAAAAAAAA INSERTING DATA AAAAAAAAAAAAAA\n";
   for (auto I = ws.begin(); I != ws.end(); ++I) {
     //Update the state with each entry
     std::vector<world_model::Attribute>& state = cur_state[I->first];
     for (auto entry = I->second.begin(); entry != I->second.end(); ++entry) {
-
-      //std::cerr<<"Checking URI, name "<<std::string(I->first.begin(), I->first.end())<<
-      //  ", "<<std::string(entry->name.begin(), entry->name.end())<<'\n';
       //Check if there is already an entry with the same name and origin
       auto same_attribute = [&](world_model::Attribute& attr) {
         return (attr.name == entry->name) and (attr.origin == entry->origin);};
       auto slot = std::find_if(state.begin(), state.end(), same_attribute);
       //Update
       if (slot != state.end()) {
-        //std::cerr<<"Assigning existing slot\n";
         *slot = *entry;
       }
       //Insert
       else {
-        //std::cerr<<"Pushing back new entry\n";
         state.push_back(*entry);
         //Remember that this attribute was stored for this identifier
         current_matches[I->first].insert(entry->name);
       }
     }
   }
-  //std::cerr<<"Size is now "<<cur_state.size()<<'\n';
 }
 
 ///Clear the current data and return what it stored. Thread safe.

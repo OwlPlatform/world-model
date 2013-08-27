@@ -145,14 +145,16 @@ class ClientConnection : public ThreadConnection {
       uint32_t ticket_number;
       //Standing query for streaming requests
       StandingQuery sq;
-      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, StandingQuery&& sq) : sq(std::move(sq)) {
+      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, StandingQuery sq) : sq(sq) {
+				std::cerr<<"Constructing request state\n";
         interval = interval;
         search_uri = uri;
         desired_attributes = attributes;
         ticket_number = ticket;
         last_serviced = 0;
+				std::cerr<<"Done constructing request state\n";
       }
-      RequestState(RequestState&& other) : sq(std::move(other.sq)) {
+      RequestState(RequestState&& other) : sq(other.sq) {
         last_serviced = other.last_serviced;
         interval = other.interval;
         search_uri = other.search_uri;
@@ -161,7 +163,7 @@ class ClientConnection : public ThreadConnection {
         ticket_number = other.ticket_number;
       }
       RequestState& operator=(RequestState&& other) {
-        sq = std::move(other.sq);
+        sq = other.sq;
         last_serviced = other.last_serviced;
         interval = other.interval;
         search_uri = other.search_uri;
@@ -577,7 +579,7 @@ class ClientConnection : public ThreadConnection {
               //Create a new request state to handle this new stream request.
               std::cerr<<"In world model server period is "<<request.stop_period<<'\n';
               RequestState rs(request.stop_period, request.object_uri,
-                  request.attributes, ticket, std::move(wm.requestStandingQuery(request.object_uri, request.attributes)));
+                  request.attributes, ticket, wm.requestStandingQuery(request.object_uri, request.attributes));
               //TODO FIXME Either a bug in this code or a bug in gcc corrupts the
               //value of rs.interval so we reassign it here.
               rs.interval = request.stop_period;

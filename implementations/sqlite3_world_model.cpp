@@ -581,6 +581,8 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
       sq->insertData(ws);
     }
   };
+	//TODO FIXME This should just call something internal to StandingQuery so
+	//that the processing thread can handle it rather than blocking here.
 	StandingQuery::for_each(push);
   //time_diff = world_model::getGRAILTime() - time_start;
   //std::cerr<<"Standing query insertion time was "<<time_diff<<'\n';
@@ -615,6 +617,8 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
   currentUpdate(uri, to_expire);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
+	//TODO FIXME This should just call something internal to StandingQuery so
+	//that the processing thread can handle it rather than blocking here.
 	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURI(uri, expires);});
 }
 
@@ -657,6 +661,8 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
   currentUpdate(uri, to_update);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
+	//TODO FIXME This should just call something internal to StandingQuery so
+	//that the processing thread can handle it rather than blocking here.
 	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURIAttributes(uri, entries, expires);});
 }
 
@@ -703,6 +709,8 @@ void SQLite3WorldModel::deleteURI(world_model::URI uri) {
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
 	//Deletions are the same as expirations from the standing query's perspective
+	//TODO FIXME This should just call something internal to StandingQuery so
+	//that the processing thread can handle it rather than blocking here.
 	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURI(uri, -1);});
 }
 
@@ -789,6 +797,8 @@ void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<wo
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
 	//Deletions are the same as expirations from the standing query's perspective
+	//TODO FIXME This should just call something internal to StandingQuery so
+	//that the processing thread can handle it rather than blocking here.
 	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURIAttributes(uri, entries, -1);});
 }
 
@@ -1140,9 +1150,10 @@ void SQLite3WorldModel::registerTransient(std::u16string& attr_name, std::u16str
  * Afterwards any updates that arrive that match the query criteria are
  * added into the standing query.
  */
-StandingQuery&& SQLite3WorldModel::requestStandingQuery(const world_model::URI& uri,
+StandingQuery SQLite3WorldModel::requestStandingQuery(const world_model::URI& uri,
     std::vector<std::u16string>& desired_attributes, bool get_data) {
 	StandingQuery sq(cur_state, uri, desired_attributes, get_data);
-	return std::move(sq);
+	std::cerr<<"Got a standing query\n";
+	return sq;
 }
 

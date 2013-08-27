@@ -70,6 +70,11 @@ class StandingQuery {
 		static std::thread data_processing_thread;
 
 		/**
+		 * Mutex that guarantees that only one data_processing_thread is running.
+		 */
+		static std::mutex data_processing_mutex;
+
+		/**
 		 * The set of all current standing queries, used to find all of the
 		 * existing StandingQuery objects so that data can be offered to them.
 		 */
@@ -127,17 +132,6 @@ class StandingQuery {
 		 */
     WorldState partial;
 
-
-    //No copying or assignment. We assume that only one StandingQuery object
-		//exists for each actual query.
-    StandingQuery& operator=(const StandingQuery&) = delete;
-    StandingQuery(const StandingQuery&) = delete;
-
-		/**
-		 * Offer data from the input queue to this StandingQuery
-		 */
-		//void offerData(WorldState& ws);
-
 	public:
     /**
      * Push new data from a solver into the internal data queue. A thread will
@@ -164,11 +158,11 @@ class StandingQuery {
 		 */
 		~StandingQuery();
 
-    ///r-value copy constructor
-    StandingQuery(StandingQuery&& other);
+    ///Copy constructor
+    StandingQuery(const StandingQuery&);
 
-    ///r-value assignment
-    StandingQuery& operator=(StandingQuery&& other);
+		///Assignment
+    StandingQuery& operator=(const StandingQuery&);
 
 		/**
 		 * Get any new data given to this standing query since the last time that
@@ -180,6 +174,11 @@ class StandingQuery {
      * Update the list of attributes provided by origins.
      */
     static void addOriginAttributes(std::u16string& origin, std::set<std::u16string>& attributes);
+
+		/**
+		 * Offer data from the input queue for every StandingQuery
+		 */
+		static void offerData(WorldState& ws);
 
     /**
      * Return true if this origin has data that this standing query might
