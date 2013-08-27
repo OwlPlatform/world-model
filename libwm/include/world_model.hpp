@@ -45,23 +45,12 @@
 ///Representation of storage and search functionality for the Octopus world model
 class WorldModel {
   public:
-    friend class QueryAccessor;
     typedef std::map<world_model::URI, std::vector<world_model::Attribute>> world_state;
 
   private:
 
     WorldModel& operator=(const WorldModel&) = delete;
     WorldModel(const WorldModel&) = delete;
-
-  protected:
-    /**
-     * Store queries in a list so iterators to queries can be deleted without
-     * affected other iterators. This way the iterators can be returned to users.
-     * This list is accessible to the QueryAccessor friend class.
-     */
-    std::list<StandingQuery> standing_queries;
-    //Mutex for the standing query list.
-    std::mutex sq_mutex;
 
   public:
 

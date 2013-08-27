@@ -28,44 +28,92 @@
 #include <utility>
 
 #include <standing_query.hpp>
+#include <owl/world_model_protocol.hpp>
 
 using std::u16string;
+using world_model::WorldState;
 
-///Mutex for the origin_attributes map
-std::mutex StandingQuery::origin_attr_mutex;
-///Attributes that different origin's will offer
+
+//Input/output queue. Input from solver threads, output to standing query thread
+boost::lockfree::queue<WorldState> StandingQuery::solver_data;
+
+//Thread that runs the dataProcessingLoop.
+std::thread StandingQuery::data_processing_thread;
+
+/**
+ * The set of all current standing queries, used to find all of the
+ * existing StandingQuery objects so that data can be offered to them.
+ */
+ThreadsafeSet<StandingQuery*> StandingQuery::subscriptions;
+
+/**
+ * A mutex to protect access to the @subscriptions set.
+ */
+std::mutex StandingQuery::subscription_mutex;
+
+/**
+ * The origin_attributes map is used to quickly check if any data from an
+ * origin is interesting.
+ */
 std::map<std::u16string, std::set<std::u16string>> StandingQuery::origin_attributes;
+
+/**
+ * Mutex for the origin_attributes map.
+ */
+std::mutex StandingQuery::origin_attr_mutex;
+
+/**
+ * Loop that moves data from the internal data queue to interested client
+ * threads.
+ */
+void StandingQuery::dataProcessingLoop() {
+	//TODO Attempt to lock a mutex to ensure a single dataProcessingLoop
+
+	//TODO Move data from @solver_data into individual queries.
+  //TODO If there is no more data then sleep for a brief period
+  //TODO If there has not been any new data for a long period of time exit the loop
+
+  //TODO Release the mutex so that another dataProcessingLoop thread can spawn
+}
 
 void StandingQuery::addOriginAttributes(std::u16string& origin, std::set<std::u16string>& attributes) {
   std::unique_lock<std::mutex> lck(origin_attr_mutex);
   origin_attributes[origin].insert(attributes.begin(), attributes.end());
 }
 
-StandingQuery::StandingQuery(const world_model::URI& uri, const std::vector<std::u16string>& desired_attributes,
-    bool get_data) : uri_pattern(uri), desired_attributes(desired_attributes), get_data(get_data) {
-  //Set this to true only after all regex patterns have compiled
-  regex_valid = false;
-  std::string u8_pattern(uri_pattern.begin(), uri_pattern.end());
-  int err = regcomp(&uri_regex, u8_pattern.c_str(), REG_EXTENDED);
-  if (0 != err) {
-    return;
-  }
-  for (auto I = desired_attributes.begin(); I != desired_attributes.end(); ++I) {
-    regex_t re;
-    std::string u8_attr_pattern(I->begin(), I->end());
-    int err = regcomp(&re, u8_attr_pattern.c_str(), REG_EXTENDED);
-    if (0 != err) {
-      regfree(&uri_regex);
-      for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
-        regfree(&(J->second));
-      }
-      return;
-    }
-    else {
-      attr_regex[*I] = re;
-    }
-  }
-  regex_valid = true;
+StandingQuery::StandingQuery(WorldState& cur_state, const world_model::URI& uri,
+		const std::vector<std::u16string>& desired_attributes, bool get_data) :
+	uri_pattern(uri), desired_attributes(desired_attributes), get_data(get_data) {
+	//Add this standing query into the subscriptions set so that it receives
+	//updates from the @data_processing_thread
+	subscriptions.insert(this);
+
+	//Set this to true only after all regex patterns have compiled
+	regex_valid = false;
+	std::string u8_pattern(uri_pattern.begin(), uri_pattern.end());
+	int err = regcomp(&uri_regex, u8_pattern.c_str(), REG_EXTENDED);
+	if (0 != err) {
+		return;
+	}
+	for (auto I = desired_attributes.begin(); I != desired_attributes.end(); ++I) {
+		regex_t re;
+		std::string u8_attr_pattern(I->begin(), I->end());
+		int err = regcomp(&re, u8_attr_pattern.c_str(), REG_EXTENDED);
+		if (0 != err) {
+			regfree(&uri_regex);
+			for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
+				regfree(&(J->second));
+			}
+			return;
+		}
+		else {
+			attr_regex[*I] = re;
+		}
+	}
+	regex_valid = true;
+	//Set up initial data from the current state.
+  WorldState ws = this->showInterested(cur_state, true);
+  this->insertData(ws);
 }
 
 ///Free memory from regular expressions
@@ -76,6 +124,9 @@ StandingQuery::~StandingQuery() {
       regfree(&(J->second));
     }
   }
+  //Remove this standing query into the subscriptions set so that it no longer
+  //receives updates from the @data_processing_thread
+  subscriptions.erase(this);
 }
 
 ///r-value copy constructor
@@ -88,6 +139,13 @@ StandingQuery::StandingQuery(StandingQuery&& other) {
   other.attr_regex.clear();
   other.regex_valid = false;
   get_data = other.get_data;
+	//Copying this data directly is safe because this object is not yet in the
+	//subscriptions list and the other object is removed from it.
+	cur_state = other.cur_state;
+	partial = other.partial;
+  //Add this standing query into the subscriptions set so that it receives
+  //updates from the @data_processing_thread
+  subscriptions.insert(this);
 }
 
 ///r-value assignment
@@ -100,6 +158,13 @@ StandingQuery& StandingQuery::operator=(StandingQuery&& other) {
   other.attr_regex.clear();
   other.regex_valid = false;
   get_data = other.get_data;
+	//Copying this data directly is safe because this object is not yet in the
+	//subscriptions list and the other object is removed from it.
+	cur_state = other.cur_state;
+	partial = other.partial;
+  //Add this standing query into the subscriptions set so that it receives
+  //updates from the @data_processing_thread
+  subscriptions.insert(this);
   return *this;
 }
 
@@ -148,7 +213,7 @@ bool StandingQuery::interestingOrigin(std::u16string& origin) {
         return true;
       }
     }
-    //Otherwise checked the cached values
+    //Otherwise check the cached values
     else {
       //If the map of matches is not empty then there was a match
       if (not attr_store->second.empty()) {
@@ -161,7 +226,7 @@ bool StandingQuery::interestingOrigin(std::u16string& origin) {
 }
 
 ///Return a subset of the world state that this query is interested in.
-StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool multiple_origins) {
+WorldState StandingQuery::showInterested(WorldState& ws, bool multiple_origins) {
   //Optimize the search if every value in this state comes from the same origin.
   //If this origin is not interesting then don't bother checking its data.
   //This is to avoid checking large numbers of attributes against the uri
@@ -170,7 +235,7 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
     //Assume here that the world state does not have any empty vectors
     try {
       if (not interestingOrigin(ws.begin()->second.at(0).origin)) {
-        return StandingQuery::world_state();
+        return WorldState();
       }
     }
     //Catch an out of range exception from at()
@@ -215,7 +280,7 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
   //Now find the attributes of interest for each URI
   //Attribute searches have AND relationships - this URI's results are only
   //matched if all of the attribute search patterns have matches.
-  world_state result;
+  WorldState result;
   for (auto uri_match = matches.begin(); uri_match != matches.end(); ++uri_match) {
     std::vector<world_model::Attribute>& uri_partial = partial[*uri_match];
     //Make a vector of attributes to search through
@@ -286,7 +351,7 @@ StandingQuery::world_state StandingQuery::showInterested(world_state& ws, bool m
   return result;
 }
 
-StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& ws, bool multiple_origins) {
+WorldState StandingQuery::showInterestedTransient(WorldState& ws, bool multiple_origins) {
   //Optimize the search if every value in this state comes from the same origin.
   //If this origin is not interesting then don't bother checking its data.
   //This is to avoid checking large numbers of attributes against the uri
@@ -295,7 +360,7 @@ StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& w
     //Assume here that the world state does not have any empty vectors
     try {
       if (not interestingOrigin(ws.begin()->second.at(0).origin)) {
-        return StandingQuery::world_state();
+        return WorldState();
       }
     }
     //Catch an out of range exception from at()
@@ -342,7 +407,7 @@ StandingQuery::world_state StandingQuery::showInterestedTransient(world_state& w
   //matched if all of the attribute search patterns have matches.
   //We don't cache transient matches since they are direct string comparisons
   //Check directly if attribute was requested
-  world_state result;
+  WorldState result;
   for (auto uri_match = matches.begin(); uri_match != matches.end(); ++uri_match) {
     //TODO FIXME For transient attributes do not use the uri_partial structure
     //since transient values should not be stored. This also means that the
@@ -474,7 +539,7 @@ void StandingQuery::expireURIAttributes(world_model::URI uri,
 }
 
 ///Insert data in a thread safe way
-void StandingQuery::insertData(world_state& ws) {
+void StandingQuery::insertData(WorldState& ws) {
   std::unique_lock<std::mutex> lck(data_mutex);
   //std::cerr<<"AAAAAAAAAAAAAA INSERTING DATA AAAAAAAAAAAAAA\n";
   for (auto I = ws.begin(); I != ws.end(); ++I) {
@@ -506,49 +571,10 @@ void StandingQuery::insertData(world_state& ws) {
 }
 
 ///Clear the current data and return what it stored. Thread safe.
-StandingQuery::world_state StandingQuery::getData() {
+WorldState StandingQuery::getData() {
   std::unique_lock<std::mutex> lck(data_mutex);
-  world_state data = cur_state;
+  WorldState data = cur_state;
   cur_state.clear();
   return data;
-}
-
-/**
- * Gets updates and clears the current state
- * This should be thread safe in the StandingQuery class
- */
-StandingQuery::world_state QueryAccessor::getUpdates() {
-  return data->getData();
-}
-
-QueryAccessor::QueryAccessor(std::list<StandingQuery>* source, std::mutex* list_mutex,
-        std::list<StandingQuery>::iterator data) : source(source), list_mutex(list_mutex), data(data) {;}
-
-///Remove the iterator from the source list.
-QueryAccessor::~QueryAccessor() {
-  std::unique_lock<std::mutex> lck(*list_mutex);
-  if (data != source->end()) {
-    source->erase(data);
-  }
-}
-
-///r-value copy constructor
-QueryAccessor::QueryAccessor(QueryAccessor&& other) :
-  source(other.source), list_mutex(other.list_mutex) {
-  //Lock the list and get its "end"
-  std::unique_lock<std::mutex> lck(*list_mutex);
-  data = other.data;
-  other.data = source->end();
-}
-
-///r-value copy constructor
-QueryAccessor& QueryAccessor::operator=(QueryAccessor&& other) {
-  //Lock the list and get its "end"
-  source = other.source;
-  list_mutex = other.list_mutex;
-  std::unique_lock<std::mutex> lck(*list_mutex);
-  data = other.data;
-  other.data = source->end();
-  return *this;
 }
 

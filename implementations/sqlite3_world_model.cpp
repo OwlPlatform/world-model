@@ -578,7 +578,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
       std::cerr<<"Inserting "<<ws.size()<<" entries for the standing query.\n";
       sq->insertData(ws);
     }
-    //Insert transients separately from normal data to enfore exact string matching
+    //Insert transients separately from normal data to enforce exact string matching
     ws = sq->showInterestedTransient(transients);
     if (not ws.empty()) {
       std::cerr<<"Inserting "<<ws.size()<<" transient entries for the standing query.\n";
@@ -1166,15 +1166,7 @@ void SQLite3WorldModel::registerTransient(std::u16string& attr_name, std::u16str
  */
 QueryAccessor SQLite3WorldModel::requestStandingQuery(const world_model::URI& uri,
     std::vector<std::u16string>& desired_attributes, bool get_data) {
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  standing_queries.push_front(StandingQuery(uri, desired_attributes, get_data));
-  //Populate the query
-  //Flag the access control so that this read does not conflict with a write.
-  SemaphoreFlag flag(access_control);
-  //Indicate that multiple origins are used when checking interest so that
-  //the standing query does not try to optimize the check based upon origins.
-  world_state ws = standing_queries.front().showInterested(cur_state, true);
-  standing_queries.front().insertData(ws);
-  return QueryAccessor(&standing_queries, &sq_mutex, standing_queries.begin());
+	StandingQuery sq(cur_state, uri, desired_attributes, get_data);
+	return std::move(sq);
 }
 

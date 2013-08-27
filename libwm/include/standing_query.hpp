@@ -34,6 +34,8 @@
 #include <string>
 #include <vector>
 
+#include <threadsafe_set.hpp>
+
 #include <owl/world_model_protocol.hpp>
 
 //Lock-free queue for pushing and consuming data
@@ -44,20 +46,58 @@
 #include <sys/types.h>
 #include <regex.h>
 
-/**
- * Standing queries are used when the same query would be repeated many times.
- * The standing query call returns an object that can be used to retrieve
- * any updates to the query since the last time it was checked. If this object
- * is destroyed then it ends the standing query.
- */
+using world_model::WorldState;
+
 class StandingQuery {
-  public:
-    typedef std::map<world_model::URI, std::vector<world_model::Attribute>> world_state;
-  private:
-    //Need to lock this mutex before changing the current state
+	private:
+		/***************************************************************************
+		 * Private static objects and functions
+		 **************************************************************************/
+
+		//Input/output queue. Input from solver threads, output to standing query thread
+    static boost::lockfree::queue<WorldState> solver_data;
+
+		/**
+		 * Loop that moves data from the internal data queue to interested client
+		 * threads.
+		 */
+		static void dataProcessingLoop();
+
+		/**
+		 * Thread that runs the dataProcessingLoop.
+		 */
+		static std::thread data_processing_thread;
+
+		/**
+		 * The set of all current standing queries, used to find all of the
+		 * existing StandingQuery objects so that data can be offered to them.
+		 */
+    static ThreadsafeSet<StandingQuery*> subscriptions;
+
+		/**
+		 * A mutex to protect access to the @subscriptions set.
+		 */
+    static std::mutex subscription_mutex;
+
+    /**
+		 * The origin_attributes map is used to quickly check if any data from an
+		 * origin is interesting.
+		 */
+    static std::map<std::u16string, std::set<std::u16string>> origin_attributes;
+
+    /**
+		 * Mutex for the origin_attributes map.
+		 */
+    static std::mutex origin_attr_mutex;
+
+		/***************************************************************************
+		 * Variables used for the regular expression matching and internal data
+		 * storage for the query.
+		 **************************************************************************/
+    //Need to lock this mutex before changing @cur_state
     std::mutex data_mutex;
     //Place where the world model will store data for this standing query.
-    world_state cur_state;
+    WorldState cur_state;
     //Remember which URIs and attributes match this query
     //For attributes remember which of the desired attributes they matched
     std::map<world_model::URI, bool> uri_accepted;
@@ -72,41 +112,72 @@ class StandingQuery {
     std::vector<std::u16string> desired_attributes;
     regex_t uri_regex;
     std::map<std::u16string, regex_t> attr_regex;
+		//True if this query should also retrieve data
     bool get_data;
+		//True after the provided regular expression successfully compiles
     bool regex_valid;
 
-    ///Mutex for the origin_attributes map
-    static std::mutex origin_attr_mutex;
-    ///Attributes that different origin's will offer
-    static std::map<std::u16string, std::set<std::u16string>> origin_attributes;
+		/**
+		 * Partial matches are when some attributes matched, but not all so the
+		 * data does not yet match the query. Partial matches are stored so that
+		 * when more data arrives that completes the match the entire data set can
+		 * be quickly set.  This also allows for rapid rechecking of a match if
+		 * attributes are deleted or expired.
+		 */
+    WorldState partial;
 
-    //No copying or assignment. Deleting the copy constructor prevents passing
-    //by value which would cause trouble with the compiled regex and the mutex.
+
+    //No copying or assignment. We assume that only one StandingQuery object
+		//exists for each actual query.
     StandingQuery& operator=(const StandingQuery&) = delete;
     StandingQuery(const StandingQuery&) = delete;
 
-    //Partial matches (some attributes matched, but not all)
-    //Partial matches are stored so that when a complete match is made they
-    //can be sent and also so that a match can be quickly rechecked if
-    //attributes are deleted or expired.
-    world_state partial;
-  public:
-    /**
-     * Update the list of attributes provided by origins.
-     */
-    static void addOriginAttributes(std::u16string& origin, std::set<std::u16string>& attributes);
+		/**
+		 * Offer data from the input queue to this StandingQuery
+		 */
+		void offerData(WorldState& ws);
 
-    StandingQuery(const world_model::URI& uri,
+	public:
+    /**
+     * Push new data from a solver into the internal data queue. A thread will
+		 * transfer this data to interested client threads.
+		 * This is thread-safe and non-blocking (except for memory allocation),
+		 * meant to be called from solver threads.
+     */
+		static void pushData(WorldState& ws);
+
+
+		/**
+		 * Create a new standing query, initializing internal regex code and adding
+		 * this StandingQuery to the internal list of queries that should see
+		 * incoming data from solvers.
+		 * Start the @data_processing_thread if this is the first standing query.
+		 */
+    StandingQuery(WorldState& cur_state, const world_model::URI& uri,
         const std::vector<std::u16string>& desired_attributes, bool get_data = true);
 
-    ///Free memory from regular expressions
-    ~StandingQuery();
+		/**
+		 * Remove this standing query from the internal list of queries.
+		 * If there are no more standing queries stop the @data_processing_thread.
+		 */
+		~StandingQuery();
 
     ///r-value copy constructor
     StandingQuery(StandingQuery&& other);
 
     ///r-value assignment
     StandingQuery& operator=(StandingQuery&& other);
+
+		/**
+		 * Get any new data given to this standing query since the last time that
+		 * getData was called.
+		 */
+		WorldState getData();
+
+    /**
+     * Update the list of attributes provided by origins.
+     */
+    static void addOriginAttributes(std::u16string& origin, std::set<std::u16string>& attributes);
 
     /**
      * Return true if this origin has data that this standing query might
@@ -122,7 +193,7 @@ class StandingQuery {
      * itself is interesting, but will skip this if the world state
      * contains data from multiple origins.
      */
-    world_state showInterested(world_state& ws, bool multiple_origins = false);
+    WorldState showInterested(WorldState& ws, bool multiple_origins = false);
 
     /**
      * Return a subset of the world state that this query is interested in.
@@ -132,7 +203,7 @@ class StandingQuery {
      * the origin itself is interesting, but will skip this if the world state
      * contains data from multiple origins.
      */
-    world_state showInterestedTransient(world_state& ws, bool multiple_origins = false);
+    WorldState showInterestedTransient(WorldState& ws, bool multiple_origins = false);
 
     /**
      * Return a subset of the world state that would be modified if the
@@ -154,83 +225,8 @@ class StandingQuery {
      * query first so the caller must check that first, on their own
      * or with the showInterested function call.
      */
-    void insertData(world_state& ws);
-
-    ///Clear the current data and return what it stored. Thread safe.
-    world_state getData();
-};
-
-//TODO Merge into standing query class, make standing query functions static
-class QueryAccessor {
-  private:
-    ///Incoming data from solvers, disseminated by the pushThread function
-    static boost::lockfree::queue<world_state> incoming_data;
-
-    std::mutex subscription_mutex;
-    static std::set<QueryAccessor*> subscriptions;
-
-    /**
-     * Need to remember the source list to remove the iterator
-     * when this object is destroyed.
-     */
-    std::list<StandingQuery>* source;
-    std::mutex* list_mutex;
-    ///List iterators are safe to changes in the underlying list
-    std::list<StandingQuery>::iterator data;
-
-    //No copying or assignment. Deleting the copy constructor prevents passing
-    //by value would cause trouble when the destructor removes this iterator
-    //from the source list.
-    QueryAccessor& operator=(const QueryAccessor&) = delete;
-    QueryAccessor(const QueryAccessor&) = delete;
-
-  public:
-    /**
-     * Gets updates and clears the current state
-     * This should be thread safe in the StandingQuery class
-     */
-    StandingQuery::world_state getUpdates();
-
-    /**
-     * TODO Create a new standing query, adding itself to the list of
-     * subscriptions.
-     */
-    QueryAccessor(const world_model::URI& uri,
-        const std::vector<std::u16string>& desired_attributes, bool get_data = true);
-
-    ///Remove this accessor from the subscription list
-    ~QueryAccessor();
-
-    ///r-value copy constructor
-    QueryAccessor(QueryAccessor&& other);
-
-    ///r-value assignment
-    QueryAccessor& operator=(QueryAccessor&& other);
-
-    /**
-     * Function that moves incoming data to the queues of class instances
-     * from the incoming data queue.
-     */ 
-    static void pushThread();
-
-    /**
-     * Expire the supplied URI at the given time.
-     */
-    static bool expireURI(world_model::URI uri, world_model::grail_time);
-
-    /**
-     * Expire the given URI's specified attributes at the given time.
-     */
-    static bool expireURIAttributes(world_model::URI uri,
-        const std::vector<world_model::Attribute>& entries,
-        world_model::grail_time);
-
-    /**
-     * Push new data from a solver to any interested standing queries.
-     */
-    static bool pushData(world_state& ws);
-};
+    void insertData(WorldState& ws);
+}
 
 #endif //ifndef __STANDING_QUERY_HPP__
-
 
