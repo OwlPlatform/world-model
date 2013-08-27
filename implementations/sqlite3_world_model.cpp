@@ -564,11 +564,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
   //std::cerr<<"DB insertion time was "<<time_diff<<'\n';
   //time_start = world_model::getGRAILTime();
 
-  //Now service standing queries with anything that has updated the
-  //current state of the world model.
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
+	auto push = [&](StandingQuery& sq) {
     //First see what items are of interest. This also tells the standing
     //query to remember partial matches so we do not need to keep feeding
     //it the current state, only the updates.
@@ -585,6 +581,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
       sq->insertData(ws);
     }
   }
+	StandingQuery::for_each(push);
   //time_diff = world_model::getGRAILTime() - time_start;
   //std::cerr<<"Standing query insertion time was "<<time_diff<<'\n';
 
@@ -618,13 +615,7 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
   currentUpdate(uri, to_expire);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this expiration
-std::cerr<<"Expiring uri "<<std::string(uri.begin(), uri.end())<<" from the sqlite3 wm server\n";
-    sq->expireURI(uri, expires);
-  }
+	StandingQuery::for_each([&](StandingQuery& sq) { sq->expireURI(uri, expires);});
 }
 
 void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<world_model::Attribute>& entries, world_model::grail_time expires) {
@@ -666,12 +657,7 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
   currentUpdate(uri, to_update);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this expiration
-    sq->expireURIAttributes(uri, entries, expires);
-  }
+	StandingQuery::for_each([&](StandingQuery& sq) { sq->expireURIAttributes(uri, entries, expires);});
 }
 
 void SQLite3WorldModel::deleteURI(world_model::URI uri) {
@@ -716,13 +702,8 @@ void SQLite3WorldModel::deleteURI(world_model::URI uri) {
   }
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this deletion
-    //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURI(uri, -1);
-  }
+	//Deletions are the same as expirations from the standing query's perspective
+	StandingQuery::for_each([&](StandingQuery& sq) { sq->expireURI(uri, -1);});
 }
 
 void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<world_model::Attribute> entries) {
@@ -807,13 +788,8 @@ void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<wo
   }
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this deletion
-    //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURIAttributes(uri, entries, -1);
-  }
+	//Deletions are the same as expirations from the standing query's perspective
+	StandingQuery::for_each([&](StandingQuery& sq) { sq->expireURIAttributes(uri, expires, -1);});
 }
 
 WorldModel::world_state SQLite3WorldModel::currentSnapshot(const URI& uri,

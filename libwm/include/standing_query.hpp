@@ -135,7 +135,7 @@ class StandingQuery {
 		/**
 		 * Offer data from the input queue to this StandingQuery
 		 */
-		void offerData(WorldState& ws);
+		//void offerData(WorldState& ws);
 
 	public:
     /**
@@ -144,8 +144,11 @@ class StandingQuery {
 		 * This is thread-safe and non-blocking (except for memory allocation),
 		 * meant to be called from solver threads.
      */
-		static void pushData(WorldState& ws);
+		//static void pushData(WorldState& ws);
 
+
+		template<class UnaryFunction>
+		static void for_each(UnaryFunction f);
 
 		/**
 		 * Create a new standing query, initializing internal regex code and adding

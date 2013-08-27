@@ -81,6 +81,11 @@ void StandingQuery::addOriginAttributes(std::u16string& origin, std::set<std::u1
   origin_attributes[origin].insert(attributes.begin(), attributes.end());
 }
 
+template<class UnaryFunction>
+static void StandingQuery::for_each(UnaryFunction f) {
+	subscriptions.for_each(f);
+}
+
 StandingQuery::StandingQuery(WorldState& cur_state, const world_model::URI& uri,
 		const std::vector<std::u16string>& desired_attributes, bool get_data) :
 	uri_pattern(uri), desired_attributes(desired_attributes), get_data(get_data) {
