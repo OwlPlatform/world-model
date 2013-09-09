@@ -224,7 +224,7 @@ class StandingQuery {
      * supplied URI attributes are expired or deleted.
      */
     void invalidateAttributes(world_model::URI name,
-        const std::vector<world_model::Attribute>& attrs_to_remove);
+        std::vector<world_model::Attribute>& attrs_to_remove);
 
     /**
      * Insert data in a thread safe way

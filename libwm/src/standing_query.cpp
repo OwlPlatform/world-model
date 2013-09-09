@@ -37,7 +37,7 @@ using world_model::WorldState;
 
 //Input/output queue. Input from solver threads, output to standing query thread
 std::mutex StandingQuery::solver_data_mutex;
-std::queue<Update> StandingQuery::solver_data;
+std::queue<StandingQuery::Update> StandingQuery::solver_data;
 
 //Thread that runs the dataProcessingLoop.
 std::thread StandingQuery::data_processing_thread;
@@ -91,15 +91,15 @@ void StandingQuery::dataProcessingLoop() {
 				auto push = [&](StandingQuery* sq) {
 					//Check for invalidation from expiration/deletion
 					if (update.invalidate_attributes) {
-						for (auto I : update.state) {
-							sq->invalidateAttributes(I->first, I->second);
+						for (auto& I : update.state) {
+							sq->invalidateAttributes(I.first, I.second);
 						}
 					}
 					else if (update.invalidate_objects) {
-						for (auto I : update.state) {
+						for (auto& I : update.state) {
 							//There should only a single update to the creation attribute
-							if (not I->second.empty() and I->second[0].name == u"creation") {
-								sq->invalidateObject(I->first, I->second[0]);
+							if (not I.second.empty() and I.second[0].name == u"creation") {
+								sq->invalidateObject(I.first, I.second[0]);
 							}
 						}
 					}
@@ -642,7 +642,7 @@ void StandingQuery::invalidateObject(world_model::URI name, world_model::Attribu
 }
 
 void StandingQuery::invalidateAttributes(world_model::URI name,
-    const std::vector<world_model::Attribute>& attrs_to_remove) {
+    std::vector<world_model::Attribute>& attrs_to_remove) {
   using world_model::Attribute;
   std::set<std::pair<u16string, u16string>> is_expired;
   std::for_each(attrs_to_remove.begin(), attrs_to_remove.end(), [&](const Attribute& a) {
@@ -658,8 +658,9 @@ void StandingQuery::invalidateAttributes(world_model::URI name,
   }
 	//Function to quickly find to be deleted entries
 	auto tbd = [&](const std::u16string& attr_name) {
-		std::find_if(attrs_to_remove.begin(), attrs_to_remove.end(), [&](const Attribute& attr)
-				{ return attr.name == attr_name;});};
+		auto check = [&](const Attribute& attr) { return attr.name == attr_name;};
+		return std::find_if(attrs_to_remove.begin(), attrs_to_remove.end(), check);
+	};
   {
     std::unique_lock<std::mutex> lck(data_mutex);
 		//If this object is in the current state then those updated attributes
@@ -669,10 +670,10 @@ void StandingQuery::invalidateAttributes(world_model::URI name,
     if (state != cur_state.end()) {
 			//Expire each attribute that is to be deleted
       std::for_each(state->second.begin(), state->second.end(), [&](Attribute& attr) {
-					auto match = tbd(attr.name);
+					std::vector<world_model::Attribute>::iterator match = tbd(attr.name);
           if (attrs_to_remove.end() != match) {
             //Set expired attributes to expired
-            attr.expiration_date = match.expiration_date;
+            attr.expiration_date = match->expiration_date;
             //Remove the attribute from the current matches set
             current_matches[name].erase(attr.name);
           }});
@@ -684,10 +685,10 @@ void StandingQuery::invalidateAttributes(world_model::URI name,
 			//Find the transmitted attributes of the object with this name
       std::set<std::u16string>& attr_names = current_matches[name];
       for (const std::u16string& attr_name : attr_names) {
-				auto match = tbd(attr.name);
+				std::vector<world_model::Attribute>::iterator match = tbd(attr_name);
 				if (attrs_to_remove.end() != match) {
 					//Push an attribute with the expired attribute's name and no data
-					cur_state[name].push_back(world_model::Attribute{attr_name, match.expiration_date, match.expiration_date, u"", {}});
+					cur_state[name].push_back(world_model::Attribute{attr_name, match->expiration_date, match->expiration_date, u"", {}});
 				}
       }
     }

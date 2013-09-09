@@ -671,7 +671,7 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
 	//their expiration.
 	WorldState changed_entry;
 	changed_entry[uri] = entries;
-	StandingQuery::offerData(to_expire, true, false);
+	StandingQuery::offerData(changed_entry, true, false);
 }
 
 void SQLite3WorldModel::deleteURI(world_model::URI uri) {
@@ -811,7 +811,7 @@ void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<wo
 	//their expiration.
 	WorldState changed_entry;
 	changed_entry[uri] = entries;
-	StandingQuery::offerData(to_expire, true, false);
+	StandingQuery::offerData(changed_entry, true, false);
 }
 
 WorldModel::world_state SQLite3WorldModel::currentSnapshot(const URI& uri,
