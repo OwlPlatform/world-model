@@ -37,7 +37,7 @@ using world_model::WorldState;
 
 //Input/output queue. Input from solver threads, output to standing query thread
 std::mutex StandingQuery::solver_data_mutex;
-std::queue<WorldState> StandingQuery::solver_data;
+std::queue<Update> StandingQuery::solver_data;
 
 //Thread that runs the dataProcessingLoop.
 std::thread StandingQuery::data_processing_thread;
@@ -86,27 +86,43 @@ void StandingQuery::dataProcessingLoop() {
 				//TODO Move data from @solver_data into individual queries.
 				//TODO If there is no more data then sleep for a brief period
 				//TODO If there has not been any new data for a long period of time exit the loop
-				WorldState data;
+				Update update;
 
 				auto push = [&](StandingQuery* sq) {
-					//First see what items are of interest. This also tells the standing
-					//query to remember partial matches so we do not need to keep feeding
-					//it the current state, only the updates.
-					auto ws = sq->showInterested(data);
-					//Insert the data.
-					if (not ws.empty()) {
-						sq->insertData(ws);
+					//Check for invalidation from expiration/deletion
+					if (update.invalidate_attributes) {
+						for (auto I : update.state) {
+							sq->invalidateAttributes(I->first, I->second);
+						}
 					}
-					/* TODO FIXME Handle transients in the queue -- have a separate transient queue?
-					//Insert transients separately from normal data to enforce exact string matching
-					ws = sq->showInterestedTransient(transients);
-					if (not ws.empty()) {
-						sq->insertData(ws);
+					else if (update.invalidate_objects) {
+						for (auto I : update.state) {
+							//There should only a single update to the creation attribute
+							if (not I->second.empty() and I->second[0].name == u"creation") {
+								sq->invalidateObject(I->first, I->second[0]);
+							}
+						}
 					}
-					*/
+					else {
+						//First see what items are of interest. This also tells the standing
+						//query to remember partial matches so we do not need to keep feeding
+						//it the current state, only the updates.
+						auto ws = sq->showInterested(update.state);
+						//Insert the data.
+						if (not ws.empty()) {
+							sq->insertData(ws);
+						}
+						/* TODO FIXME Handle transients in the queue -- have a separate transient queue?
+						//Insert transients separately from normal data to enforce exact string matching
+						ws = sq->showInterestedTransient(transients);
+						if (not ws.empty()) {
+						sq->insertData(ws);
+						}
+						*/
+					}
 				};
 				while (not solver_data.empty()) {
-					data = solver_data.front();
+					update = solver_data.front();
 					solver_data.pop();
 					StandingQuery::for_each(push);
 				}
@@ -132,11 +148,11 @@ void StandingQuery::dataProcessingLoop() {
 /**
  * Offer data from the input queue for every StandingQuery
  */
-void StandingQuery::offerData(WorldState& ws) {
+void StandingQuery::offerData(WorldState& ws, bool invalidate_attributes, bool invalidate_objects) {
 	//TODO Put in a timer and fail with an error after too long?
 	{
 		std::unique_lock<std::mutex> lck(solver_data_mutex);
-		solver_data.push(ws);
+		solver_data.push(Update{ws, invalidate_attributes, invalidate_objects});
 	}
 	//Spawn the dataProcessingLoop thread if it is not running
 	{
@@ -596,72 +612,84 @@ WorldState StandingQuery::showInterestedTransient(WorldState& ws, bool multiple_
   return result;
 }
 
-void StandingQuery::expireURI(world_model::URI uri, world_model::grail_time expires) {
+void StandingQuery::invalidateObject(world_model::URI name, world_model::Attribute creation) {
   //Make sure we don't store a partial for this if it is expired or deleted.
-  partial.erase(uri);
-  uri_accepted.erase(uri);
-  uri_matches.erase(uri);
+  partial.erase(name);
+  uri_accepted.erase(name);
+  uri_matches.erase(name);
   std::unique_lock<std::mutex> lck(data_mutex);
-  auto state = cur_state.find(uri);
+  auto state = cur_state.find(name);
   //If this data is in the current state then expire all of the attributes
   if (state != cur_state.end()) {
     std::for_each(state->second.begin(), state->second.end(), [&](world_model::Attribute& attr) {
-        current_matches[uri].erase(attr.name);
-        attr.expiration_date = expires; });
+				//Remove this from the cached matches and set an expiration date in the current state
+        current_matches[name].erase(attr.name);
+        attr.expiration_date = creation.expiration_date; });
   }
-  //If the current state does not have values for some attributes that were
-  //previously sent then make sure to expire these as well
-  if (current_matches.end() != current_matches.find(uri)) {
-    std::set<std::u16string>& attr_names = current_matches[uri];
+	//The attributes of the expired URI that were in the current state were
+	//expired, but now make sure that all attributes ever sent from this request
+	//are also expired.
+  if (current_matches.end() != current_matches.find(name)) {
+    std::set<std::u16string>& attr_names = current_matches[name];
     for (const std::u16string& attr_name : attr_names) {
       //Push an attribute with the expired attribute's name and no data
-      cur_state[uri].push_back(world_model::Attribute{attr_name, expires, expires, u"", {}});
+			cur_state[name].push_back(world_model::Attribute{attr_name,
+					creation.expiration_date, creation.expiration_date, u"", {}});
     }
-    current_matches.erase(uri);
+		//Finally remove this object name from the matches list.
+    current_matches.erase(name);
   }
 }
 
-void StandingQuery::expireURIAttributes(world_model::URI uri,
-    const std::vector<world_model::Attribute>& entries, world_model::grail_time expires) {
+void StandingQuery::invalidateAttributes(world_model::URI name,
+    const std::vector<world_model::Attribute>& attrs_to_remove) {
   using world_model::Attribute;
   std::set<std::pair<u16string, u16string>> is_expired;
-  std::for_each(entries.begin(), entries.end(), [&](const Attribute& a) {
+  std::for_each(attrs_to_remove.begin(), attrs_to_remove.end(), [&](const Attribute& a) {
       is_expired.insert(std::make_pair(a.name, a.origin));});
   //Make sure we don't store a partial for this if it is expired or deleted.
   {
-    auto state = partial.find(uri);
+    auto state = partial.find(name);
     if (state != partial.end()) {
-      std::vector<Attribute>& attr = state->second;
-      attr.erase(std::remove_if(attr.begin(), attr.end(), [&](Attribute& a) {
-            return 0 < is_expired.count(std::make_pair(a.name, a.origin));}), attr.end());
+      std::vector<Attribute>& attrs = state->second;
+      attrs.erase(std::remove_if(attrs.begin(), attrs.end(), [&](Attribute& a) {
+            return 0 < is_expired.count(std::make_pair(a.name, a.origin));}), attrs.end());
     }
   }
+	//Function to quickly find to be deleted entries
+	auto tbd = [&](const std::u16string& attr_name) {
+		std::find_if(attrs_to_remove.begin(), attrs_to_remove.end(), [&](const Attribute& attr)
+				{ return attr.name == attr_name;});};
   {
     std::unique_lock<std::mutex> lck(data_mutex);
-    auto state = cur_state.find(uri);
-    //If this data is in the current state then expire all of the attributes
+		//If this object is in the current state then those updated attributes
+		//should receive an expiration date.
+    auto state = cur_state.find(name);
+    //If this data is in the current state then expire it
     if (state != cur_state.end()) {
-      //Function to quickly find to be done entries
-      auto tbd = [&](const std::u16string& name) {
-        return entries.end() != std::find_if(entries.begin(), entries.end(),
-            [&](const Attribute& attr) { return attr.name == name;});};
+			//Expire each attribute that is to be deleted
       std::for_each(state->second.begin(), state->second.end(), [&](Attribute& attr) {
-          if (tbd(attr.name)) {
+					auto match = tbd(attr.name);
+          if (attrs_to_remove.end() != match) {
             //Set expired attributes to expired
-            attr.expiration_date = expires;
+            attr.expiration_date = match.expiration_date;
             //Remove the attribute from the current matches set
-            current_matches[uri].erase(attr.name);
+            current_matches[name].erase(attr.name);
           }});
     }
-    //If the current state does not have values for some attributes that were
-    //previously sent then make sure to expire these as well
-    if (current_matches.end() != current_matches.find(uri)) {
-      std::set<std::u16string>& attr_names = current_matches[uri];
+    //The current state may not have every attribute ever sent (if they haven't
+		//been udpated since the last time data was read). We need to expire older
+		//attributes here.
+    if (current_matches.end() != current_matches.find(name)) {
+			//Find the transmitted attributes of the object with this name
+      std::set<std::u16string>& attr_names = current_matches[name];
       for (const std::u16string& attr_name : attr_names) {
-        //Push an attribute with the expired attribute's name and no data
-        cur_state[uri].push_back(world_model::Attribute{attr_name, expires, expires, u"", {}});
+				auto match = tbd(attr.name);
+				if (attrs_to_remove.end() != match) {
+					//Push an attribute with the expired attribute's name and no data
+					cur_state[name].push_back(world_model::Attribute{attr_name, match.expiration_date, match.expiration_date, u"", {}});
+				}
       }
-      current_matches.erase(uri);
     }
   }
 }

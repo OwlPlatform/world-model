@@ -53,10 +53,15 @@ class StandingQuery {
 		/***************************************************************************
 		 * Private static objects and functions
 		 **************************************************************************/
+		struct Update {
+			WorldState state;
+			bool invalidate_attributes;
+			bool invalidate_objects;
+		};
 
 		//Input/output queue. Input from solver threads, output to standing query thread
 		static std::mutex solver_data_mutex;
-    static std::queue<WorldState> solver_data;
+    static std::queue<Update> solver_data;
 
 		/**
 		 * Loop that moves data from the internal data queue to interested client
@@ -177,8 +182,10 @@ class StandingQuery {
 
 		/**
 		 * Offer data from the input queue for every StandingQuery
+		 * @invalidate is true if the object or attributes are not longer valid,
+		 * due to expiration or deletion, and should be removed.
 		 */
-		static void offerData(WorldState& ws);
+		static void offerData(WorldState& ws, bool invalidate_attributes, bool invalidate_objects);
 
     /**
      * Return true if this origin has data that this standing query might
@@ -207,18 +214,17 @@ class StandingQuery {
     WorldState showInterestedTransient(WorldState& ws, bool multiple_origins = false);
 
     /**
-     * Return a subset of the world state that would be modified if the
+     * Invalidate a subset of the world state that would be modified if the
      * supplied URI is expired or deleted.
      */
-    void expireURI(world_model::URI uri, world_model::grail_time);
+		void invalidateObject(world_model::URI name, world_model::Attribute creation);
 
     /**
      * Return a subset of the world state that would be modified if the
      * supplied URI attributes are expired or deleted.
      */
-    void expireURIAttributes(world_model::URI uri,
-        const std::vector<world_model::Attribute>& entries,
-        world_model::grail_time);
+    void invalidateAttributes(world_model::URI name,
+        const std::vector<world_model::Attribute>& attrs_to_remove);
 
     /**
      * Insert data in a thread safe way

@@ -30,6 +30,8 @@ using namespace world_model;
 using std::vector;
 using std::u16string;
 
+using world_model::WorldState;
+
 #define DEBUG
 
 struct Debug {
@@ -581,9 +583,10 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
       sq->insertData(ws);
     }
   };
-	//TODO FIXME This should just call something internal to StandingQuery so
-	//that the processing thread can handle it rather than blocking here.
+	//TODO FIXME StandingQuery::offerData needs to be able to handle transient data.
 	StandingQuery::for_each(push);
+	//Send data to the standing queries
+	//StandingQuery::offerData(current_update, false, false);
   //time_diff = world_model::getGRAILTime() - time_start;
   //std::cerr<<"Standing query insertion time was "<<time_diff<<'\n';
 
@@ -608,7 +611,9 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
     //uri from the in-memory world memory.
     for (auto I = cur_state[uri].begin(); I != cur_state[uri].end(); ++I) {
       I->expiration_date = expires;
-      to_expire.push_back(*I);
+			if (I->name == u"creation") {
+				to_expire.push_back(*I);
+			}
     }
     cur_state.erase(uri);
   }
@@ -617,9 +622,10 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
   currentUpdate(uri, to_expire);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-	//TODO FIXME This should just call something internal to StandingQuery so
-	//that the processing thread can handle it rather than blocking here.
-	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURI(uri, expires);});
+	//Offer a world state with the expiration date set to indicate expiration.
+	WorldState changed_entry;
+	changed_entry[uri] = to_expire;
+	StandingQuery::offerData(changed_entry, false, true);
 }
 
 void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<world_model::Attribute>& entries, world_model::grail_time expires) {
@@ -661,9 +667,11 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
   currentUpdate(uri, to_update);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-	//TODO FIXME This should just call something internal to StandingQuery so
-	//that the processing thread can handle it rather than blocking here.
-	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURIAttributes(uri, entries, expires);});
+	//Offer a world state with the expiration date of attributes set to indicate
+	//their expiration.
+	WorldState changed_entry;
+	changed_entry[uri] = entries;
+	StandingQuery::offerData(to_expire, true, false);
 }
 
 void SQLite3WorldModel::deleteURI(world_model::URI uri) {
@@ -709,9 +717,11 @@ void SQLite3WorldModel::deleteURI(world_model::URI uri) {
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
 	//Deletions are the same as expirations from the standing query's perspective
-	//TODO FIXME This should just call something internal to StandingQuery so
-	//that the processing thread can handle it rather than blocking here.
-	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURI(uri, -1);});
+	//Offer a world state with the expiration date set to indicate expiration.
+	WorldState changed_entry;
+  world_model::Attribute expiration{u"creation", -1, -1, u"", {}};
+	changed_entry[uri].push_back(expiration);
+	StandingQuery::offerData(changed_entry, false, true);
 }
 
 void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<world_model::Attribute> entries) {
@@ -797,9 +807,11 @@ void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<wo
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
 	//Deletions are the same as expirations from the standing query's perspective
-	//TODO FIXME This should just call something internal to StandingQuery so
-	//that the processing thread can handle it rather than blocking here.
-	StandingQuery::for_each([&](StandingQuery* sq) { sq->expireURIAttributes(uri, entries, -1);});
+	//Offer a world state with the expiration date of attributes set to indicate
+	//their expiration.
+	WorldState changed_entry;
+	changed_entry[uri] = entries;
+	StandingQuery::offerData(to_expire, true, false);
 }
 
 WorldModel::world_state SQLite3WorldModel::currentSnapshot(const URI& uri,
