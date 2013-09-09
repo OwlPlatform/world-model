@@ -42,7 +42,7 @@
 #include "semaphore.hpp"
 #include "standing_query.hpp"
 
-///Representation of storage and search functionality for the Octopus world model
+///Representation of storage and search functionality for the world model
 class WorldModel {
   public:
     typedef std::map<world_model::URI, std::vector<world_model::Attribute>> world_state;
