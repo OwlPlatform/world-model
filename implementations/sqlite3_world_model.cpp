@@ -30,6 +30,8 @@ using namespace world_model;
 using std::vector;
 using std::u16string;
 
+using world_model::WorldState;
+
 #define DEBUG
 
 struct Debug {
@@ -564,11 +566,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
   //std::cerr<<"DB insertion time was "<<time_diff<<'\n';
   //time_start = world_model::getGRAILTime();
 
-  //Now service standing queries with anything that has updated the
-  //current state of the world model.
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
+	auto push = [&](StandingQuery* sq) {
     //First see what items are of interest. This also tells the standing
     //query to remember partial matches so we do not need to keep feeding
     //it the current state, only the updates.
@@ -578,13 +576,17 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
       std::cerr<<"Inserting "<<ws.size()<<" entries for the standing query.\n";
       sq->insertData(ws);
     }
-    //Insert transients separately from normal data to enfore exact string matching
+    //Insert transients separately from normal data to enforce exact string matching
     ws = sq->showInterestedTransient(transients);
     if (not ws.empty()) {
       std::cerr<<"Inserting "<<ws.size()<<" transient entries for the standing query.\n";
       sq->insertData(ws);
     }
-  }
+  };
+	//TODO FIXME StandingQuery::offerData needs to be able to handle transient data.
+	StandingQuery::for_each(push);
+	//Send data to the standing queries
+	//StandingQuery::offerData(current_update, false, false);
   //time_diff = world_model::getGRAILTime() - time_start;
   //std::cerr<<"Standing query insertion time was "<<time_diff<<'\n';
 
@@ -609,7 +611,9 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
     //uri from the in-memory world memory.
     for (auto I = cur_state[uri].begin(); I != cur_state[uri].end(); ++I) {
       I->expiration_date = expires;
-      to_expire.push_back(*I);
+			if (I->name == u"creation") {
+				to_expire.push_back(*I);
+			}
     }
     cur_state.erase(uri);
   }
@@ -618,13 +622,10 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
   currentUpdate(uri, to_expire);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this expiration
-std::cerr<<"Expiring uri "<<std::string(uri.begin(), uri.end())<<" from the sqlite3 wm server\n";
-    sq->expireURI(uri, expires);
-  }
+	//Offer a world state with the expiration date set to indicate expiration.
+	WorldState changed_entry;
+	changed_entry[uri] = to_expire;
+	StandingQuery::offerData(changed_entry, false, true);
 }
 
 void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<world_model::Attribute>& entries, world_model::grail_time expires) {
@@ -666,12 +667,11 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
   currentUpdate(uri, to_update);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this expiration
-    sq->expireURIAttributes(uri, entries, expires);
-  }
+	//Offer a world state with the expiration date of attributes set to indicate
+	//their expiration.
+	WorldState changed_entry;
+	changed_entry[uri] = entries;
+	StandingQuery::offerData(to_expire, true, false);
 }
 
 void SQLite3WorldModel::deleteURI(world_model::URI uri) {
@@ -716,13 +716,12 @@ void SQLite3WorldModel::deleteURI(world_model::URI uri) {
   }
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this deletion
-    //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURI(uri, -1);
-  }
+	//Deletions are the same as expirations from the standing query's perspective
+	//Offer a world state with the expiration date set to indicate expiration.
+	WorldState changed_entry;
+  world_model::Attribute expiration{u"creation", -1, -1, u"", {}};
+	changed_entry[uri].push_back(expiration);
+	StandingQuery::offerData(changed_entry, false, true);
 }
 
 void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<world_model::Attribute> entries) {
@@ -807,18 +806,17 @@ void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<wo
   }
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this deletion
-    //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURIAttributes(uri, entries, -1);
-  }
+	//Deletions are the same as expirations from the standing query's perspective
+	//Offer a world state with the expiration date of attributes set to indicate
+	//their expiration.
+	WorldState changed_entry;
+	changed_entry[uri] = entries;
+	StandingQuery::offerData(to_expire, true, false);
 }
 
 WorldModel::world_state SQLite3WorldModel::currentSnapshot(const URI& uri,
-                                                    vector<u16string>& desired_attributes,
-                                                    bool get_data) {
+		vector<u16string>& desired_attributes,
+		bool get_data) {
   //Find which URIs match the given search string
   std::vector<world_model::URI> matches = searchURI(uri);
 
@@ -1164,17 +1162,10 @@ void SQLite3WorldModel::registerTransient(std::u16string& attr_name, std::u16str
  * Afterwards any updates that arrive that match the query criteria are
  * added into the standing query.
  */
-QueryAccessor SQLite3WorldModel::requestStandingQuery(const world_model::URI& uri,
+StandingQuery SQLite3WorldModel::requestStandingQuery(const world_model::URI& uri,
     std::vector<std::u16string>& desired_attributes, bool get_data) {
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  standing_queries.push_front(StandingQuery(uri, desired_attributes, get_data));
-  //Populate the query
-  //Flag the access control so that this read does not conflict with a write.
-  SemaphoreFlag flag(access_control);
-  //Indicate that multiple origins are used when checking interest so that
-  //the standing query does not try to optimize the check based upon origins.
-  world_state ws = standing_queries.front().showInterested(cur_state, true);
-  standing_queries.front().insertData(ws);
-  return QueryAccessor(&standing_queries, &sq_mutex, standing_queries.begin());
+	StandingQuery sq(cur_state, uri, desired_attributes, get_data);
+	std::cerr<<"Got a standing query\n";
+	return sq;
 }
 

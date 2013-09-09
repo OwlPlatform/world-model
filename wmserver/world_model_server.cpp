@@ -143,16 +143,18 @@ class ClientConnection : public ThreadConnection {
       std::vector<u16string> desired_attributes;
       WorldModel::world_state last_state;
       uint32_t ticket_number;
-      //Standy query data accessor
-      QueryAccessor qa;
-      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, QueryAccessor&& qa) : qa(std::move(qa)) {
+      //Standing query for streaming requests
+      StandingQuery sq;
+      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, StandingQuery sq) : sq(sq) {
+				std::cerr<<"Constructing request state\n";
         interval = interval;
         search_uri = uri;
         desired_attributes = attributes;
         ticket_number = ticket;
         last_serviced = 0;
+				std::cerr<<"Done constructing request state\n";
       }
-      RequestState(RequestState&& other) : qa(std::move(other.qa)) {
+      RequestState(RequestState&& other) : sq(other.sq) {
         last_serviced = other.last_serviced;
         interval = other.interval;
         search_uri = other.search_uri;
@@ -161,7 +163,7 @@ class ClientConnection : public ThreadConnection {
         ticket_number = other.ticket_number;
       }
       RequestState& operator=(RequestState&& other) {
-        qa = std::move(other.qa);
+        sq = other.sq;
         last_serviced = other.last_serviced;
         interval = other.interval;
         search_uri = other.search_uri;
@@ -316,6 +318,7 @@ class ClientConnection : public ThreadConnection {
         streaming_thread.join();
       }
       --total_connections;
+      std::cerr<<"Client connection closed. ("<<total_connections<<" connections remaining)\n";
     }
 
     //Interrupt this thread and cause it to stop.
@@ -433,7 +436,7 @@ class ClientConnection : public ThreadConnection {
     //the aliased world data that should be sent to the client to represent
     //the changes in the world model.
     vector<AliasedWorldData> updateStreamRequest(RequestState& rs) {
-      WorldModel::world_state changed = rs.qa.getUpdates();
+      WorldModel::world_state changed = rs.sq.getData();
       //Apply user-supplied preference levels here
       applyOriginPreferences(changed);
       rs.last_serviced = getGRAILTime();
@@ -576,7 +579,7 @@ class ClientConnection : public ThreadConnection {
               //Create a new request state to handle this new stream request.
               std::cerr<<"In world model server period is "<<request.stop_period<<'\n';
               RequestState rs(request.stop_period, request.object_uri,
-                  request.attributes, ticket, std::move(wm.requestStandingQuery(request.object_uri, request.attributes)));
+                  request.attributes, ticket, wm.requestStandingQuery(request.object_uri, request.attributes));
               //TODO FIXME Either a bug in this code or a bug in gcc corrupts the
               //value of rs.interval so we reassign it here.
               rs.interval = request.stop_period;
@@ -731,6 +734,7 @@ class SolverConnection : public ThreadConnection {
     ~SolverConnection() {
       std::cerr<<"Solver connection closing.\n";
       --total_connections;
+      std::cerr<<"Solver connection closed. ("<<SolverConnection::total_connections<<" connections remaining)\n";
     }
 
     //Interrupt this thread and cause it to stop.

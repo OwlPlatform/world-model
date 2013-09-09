@@ -80,7 +80,7 @@ class ThreadConnection {
     ///Removes any finished connections from the connections list.
     static void cleanFinished();
 
-    ///Intantiate and run a derived connection
+    ///Instantiate and run a derived connection
     static void makeNewConnection(ClientSocket&& sock, std::function<ThreadConnection* (ClientSocket&& sock)> fun);
 
     ///Execute a function on each active ThreadConnection.
