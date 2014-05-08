@@ -34,17 +34,11 @@ class MysqlWorldModel : public WorldModel {
     std::string db_name;
     std::string user;
     std::string password;
-
-    //The current state of the world model.
-    world_state cur_state;
+    
     //Do not store transient types in a database.
     //Recognize types by a unique attribute name and origin pair
     std::mutex transient_lock;
     std::set<std::pair<std::u16string, std::u16string>> transient;
-
-    //Read operations can be done simultaneously but a write operation requires
-    //exclusive access to the current state map.
-    Semaphore access_control;
 
     //Update expiration dates in the database.
     WorldModel::world_state databaseUpdate(world_model::URI& uri,
@@ -134,20 +128,6 @@ class MysqlWorldModel : public WorldModel {
     std::vector<world_model::URI> searchURI(const std::u16string& glob);
 
     /**
-     * Get the current state of the world model.
-     * Any number of read requests can be simultaneously serviced.
-     * The provided URI is treated as a regex string and results for
-     * any URIs that match will be returned.
-     * The attributes variable indicates which attribute values should
-     * be returned and the get_data variable indicates if the data fields
-     * of those attributes should be filled in.
-     * If no attributes are specified then all attributes are returned.
-     */
-    world_state currentSnapshot(const world_model::URI& uri,
-                                std::vector<std::u16string>& desired_attributes,
-                                bool get_data = true);
-
-    /**
      * Get the state of the world model after the data from the given time range.
      * Any number of read requests can be simultaneously serviced.
      */
@@ -162,22 +142,7 @@ class MysqlWorldModel : public WorldModel {
     world_state historicDataInRange(const world_model::URI& uri,
                                     std::vector<std::u16string>& desired_attributes,
                                     world_model::grail_time start, world_model::grail_time stop);
-    
-    /**
-     * Register an attribute name as a transient type. Transient types are not
-     * stored in the SQL table and are not stored in memory. They are only
-     * handed to standing queries.
-     */
-    void registerTransient(std::u16string& attr_name, std::u16string& origin);
 
-    /**
-     * When this request is called the query object is immediately populated.
-     * Afterwards any updates that arrive that match the query criteria are
-     * added into the standing query.
-     */
-    QueryAccessor requestStandingQuery(const world_model::URI& uri,
-                                       std::vector<std::u16string>& desired_attributes,
-                                       bool get_data = true);
 };
 
 #endif

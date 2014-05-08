@@ -1,6 +1,7 @@
 SET(SourceFiles
   standing_query.cpp
   semaphore.cpp
+	world_model.cpp
 )
 
 add_library (owlwm SHARED ${SourceFiles})

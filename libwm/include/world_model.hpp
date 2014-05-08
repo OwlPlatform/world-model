@@ -51,7 +51,20 @@ class WorldModel {
 
     WorldModel& operator=(const WorldModel&) = delete;
     WorldModel(const WorldModel&) = delete;
+    
+  protected:
+    //Do not store transient types in a database.
+    //Recognize types by a unique attribute name and origin pair
+    std::mutex transient_lock;
+    std::set<std::pair<std::u16string, std::u16string>> transient;
 
+    //The current state of the world model.
+    world_state cur_state;
+
+    //Read operations can be done simultaneously but a write operation requires
+    //exclusive access to the current state map.
+    Semaphore access_control;
+    
   public:
 
     /*
@@ -61,8 +74,8 @@ class WorldModel {
      * the name is empty then no persistent storage should be used.
      */
     WorldModel() {};
-    ///Destructor is virtual so that destructors of derived classes are called.
-    virtual ~WorldModel() {};
+    ///Destructor is virtual to ensure destructors of derived classes are called.
+    virtual ~WorldModel();
 
     /*
      * Create a new URI in the world model. Returns true if the URI is created
@@ -121,7 +134,7 @@ class WorldModel {
      */
     virtual world_state currentSnapshot(const world_model::URI& uri,
                                         std::vector<std::u16string>& desired_attributes,
-                                        bool get_data = true) = 0;
+                                        bool get_data = true);
 
     /**
      * Get the state of the world model after the data from the given time range.
@@ -143,16 +156,16 @@ class WorldModel {
      * Register an attribute name as a transient type. Transient types are not
      * permanently stored on disk but are retrieveable through currentSnapshot requests.
      */
-    virtual void registerTransient(std::u16string& attr_name, std::u16string& origin) = 0;
-
+    virtual void registerTransient(std::u16string& attr_name, std::u16string& origin);
+    
     /**
      * When this request is called the query object is immediately populated.
      * Afterwards any updates that arrive that match the query criteria are
      * added into the standing query.
      */
-		virtual StandingQuery requestStandingQuery(const world_model::URI& uri,
-				std::vector<std::u16string>& desired_attributes,
-				bool get_data = true) = 0;
+    virtual StandingQuery requestStandingQuery(const world_model::URI& uri,
+                                               std::vector<std::u16string>& desired_attributes,
+                                               bool get_data = true);
 };
 
 #endif

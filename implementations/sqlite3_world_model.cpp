@@ -460,7 +460,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
           current_update[uri].push_back(creation_attr);
         }
         else {
-          //Don't insert anything from ths URI
+          //Don't insert anything from this URI
           entries.clear();
         }
       }
@@ -566,7 +566,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
   //std::cerr<<"DB insertion time was "<<time_diff<<'\n';
   //time_start = world_model::getGRAILTime();
 
-	auto push = [&](StandingQuery* sq) {
+  auto push = [&](StandingQuery* sq) {
     //First see what items are of interest. This also tells the standing
     //query to remember partial matches so we do not need to keep feeding
     //it the current state, only the updates.
@@ -583,10 +583,10 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
       sq->insertData(ws);
     }
   };
-	//TODO FIXME StandingQuery::offerData needs to be able to handle transient data.
-	StandingQuery::for_each(push);
-	//Send data to the standing queries
-	//StandingQuery::offerData(current_update, false, false);
+  StandingQuery::for_each(push);
+  //TODO FIXME Shorter if StandingQuery::offerData handled transient data.
+  //Send data to the standing queries
+  //StandingQuery::offerData(current_update, false, false);
   //time_diff = world_model::getGRAILTime() - time_start;
   //std::cerr<<"Standing query insertion time was "<<time_diff<<'\n';
 
@@ -611,9 +611,9 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
     //uri from the in-memory world memory.
     for (auto I = cur_state[uri].begin(); I != cur_state[uri].end(); ++I) {
       I->expiration_date = expires;
-			if (I->name == u"creation") {
-				to_expire.push_back(*I);
-			}
+      if (I->name == u"creation") {
+        to_expire.push_back(*I);
+      }
     }
     cur_state.erase(uri);
   }
@@ -622,10 +622,10 @@ void SQLite3WorldModel::expireURI(world_model::URI uri, world_model::grail_time 
   currentUpdate(uri, to_expire);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-	//Offer a world state with the expiration date set to indicate expiration.
-	WorldState changed_entry;
-	changed_entry[uri] = to_expire;
-	StandingQuery::offerData(changed_entry, false, true);
+  //Offer a world state with the expiration date set to indicate expiration.
+  WorldState changed_entry;
+  changed_entry[uri] = to_expire;
+  StandingQuery::offerData(changed_entry, false, true);
 }
 
 void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<world_model::Attribute>& entries, world_model::grail_time expires) {
@@ -667,11 +667,11 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
   currentUpdate(uri, to_update);
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
 
-	//Offer a world state with the expiration date of attributes set to indicate
-	//their expiration.
-	WorldState changed_entry;
-	changed_entry[uri] = entries;
-	StandingQuery::offerData(changed_entry, true, false);
+  //Offer a world state with the expiration date of attributes set to indicate
+  //their expiration.
+  WorldState changed_entry;
+  changed_entry[uri] = entries;
+  StandingQuery::offerData(changed_entry, true, false);
 }
 
 void SQLite3WorldModel::deleteURI(world_model::URI uri) {
@@ -715,13 +715,13 @@ void SQLite3WorldModel::deleteURI(world_model::URI uri) {
     sqlite3_finalize(statement_p);
   }
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
-
-	//Deletions are the same as expirations from the standing query's perspective
-	//Offer a world state with the expiration date set to indicate expiration.
-	WorldState changed_entry;
+  
+  //Deletions are the same as expirations from the standing query's perspective
+  //Offer a world state with the expiration date set to indicate expiration.
+  WorldState changed_entry;
   world_model::Attribute expiration{u"creation", -1, -1, u"", {}};
-	changed_entry[uri].push_back(expiration);
-	StandingQuery::offerData(changed_entry, false, true);
+  changed_entry[uri].push_back(expiration);
+  StandingQuery::offerData(changed_entry, false, true);
 }
 
 void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<world_model::Attribute> entries) {
@@ -805,91 +805,15 @@ void SQLite3WorldModel::deleteURIAttributes(world_model::URI uri, std::vector<wo
     sqlite3_finalize(statement_p);
   }
   sqlite3_exec(db_handle, "COMMIT TRANSACTION;", NULL, 0, NULL);
-
-	//Deletions are the same as expirations from the standing query's perspective
-	//Offer a world state with the expiration date of attributes set to indicate
-	//their expiration.
-	WorldState changed_entry;
-	changed_entry[uri] = entries;
-	StandingQuery::offerData(changed_entry, true, false);
+  
+  //Deletions are the same as expirations from the standing query's perspective
+  //Offer a world state with the expiration date of attributes set to indicate
+  //their expiration.
+  WorldState changed_entry;
+  changed_entry[uri] = entries;
+  StandingQuery::offerData(changed_entry, true, false);
 }
 
-WorldModel::world_state SQLite3WorldModel::currentSnapshot(const URI& uri,
-		vector<u16string>& desired_attributes,
-		bool get_data) {
-  //Find which URIs match the given search string
-  std::vector<world_model::URI> matches = searchURI(uri);
-
-  world_state result;
-  //Return nothing when the attributes list is empty.
-  if (desired_attributes.empty()) {
-    return result;
-  }
-
-  if (0 < matches.size()) {
-    //Make a regular expression for each attribute
-    //First build the expressions
-    std::vector<regex_t> expressions;
-    for (auto exp_str = desired_attributes.begin(); exp_str != desired_attributes.end(); ++exp_str) {
-      regex_t exp;
-      int err = regcomp(&exp, std::string(exp_str->begin(), exp_str->end()).c_str(), REG_EXTENDED);
-      if (0 != err) {
-        debug<<"Error compiling regular expression "<<std::string(exp_str->begin(), exp_str->end())<<" in attribute of snapshot request.\n";
-      }
-      else {
-        expressions.push_back(exp);
-      }
-    }
-    //Flag the access control so that this read does not conflict with a write.
-    SemaphoreFlag flag(access_control);
-    
-    //Find the attributes of interest for each URI
-    //Attributes search have an AND relationship - this URI's results are only
-    //returned if all of the attribute search have matches.
-    for (auto uri_match = matches.begin(); uri_match != matches.end(); ++uri_match) {
-      //Make a reference to the URI's attributes for ease of access
-      std::vector<world_model::Attribute>& attributes = cur_state[*uri_match];
-      std::vector<world_model::Attribute> matched_attributes;
-      std::vector<bool> attr_matched(expressions.size());
-      //Check each of this URI's attributes to see if it was requested
-      for (auto attr = attributes.begin(); attr != attributes.end(); ++attr) {
-        //This is a desired attribute if it appears in the attributes list
-        //Also return this attribute if no attributes were specified
-        //Check for a match that consumes the entire string
-        //TODO Should also check origins here
-        //Count which search expressions match
-        bool matched = false;
-        for (size_t search_ind = 0; search_ind < expressions.size(); ++search_ind) {
-          //Use regex matching
-          regmatch_t pmatch;
-          int match = regexec(&expressions[search_ind], std::string(attr->name.begin(), attr->name.end()).c_str(), 1, &pmatch, 0);
-          if (0 == match and 0 == pmatch.rm_so and attr->name.size() == pmatch.rm_eo) {
-            attr_matched[search_ind] = true;
-            matched = true;
-          }
-        }
-        if (matched) {
-          if (get_data) {
-            matched_attributes.push_back(*attr);
-          }
-          else {
-            matched_attributes.push_back(
-                Attribute{attr->name, attr->creation_date, attr->expiration_date, attr->origin, Buffer{}});
-          }
-        }
-      }
-      //If all of the desired attributes were matched then return this URI
-      //and its attributes to the user.
-      if (std::none_of(attr_matched.begin(), attr_matched.end(), [&](const bool& b) { return not b;})) {
-        result[*uri_match] = matched_attributes;
-      }
-    }
-    //Free the memory used in the regex
-    std::for_each(expressions.begin(), expressions.end(), [&](regex_t& exp) { regfree(&exp);});
-  }
-
-  return result;
-}
 
 //Uses the given SQL query and uri to fetch create a WorldData object and return it.
 WorldModel::world_state SQLite3WorldModel::fetchWorldData(sqlite3_stmt* statement_p) {
@@ -1150,22 +1074,4 @@ WorldModel::world_state SQLite3WorldModel::historicDataInRange(const world_model
   */
 }
 
-//Register an attribute name as a transient type. Transient types are not
-//stored in the SQL table but are stored in the cur_state map.
-void SQLite3WorldModel::registerTransient(std::u16string& attr_name, std::u16string& origin) {
-  std::unique_lock<std::mutex> lck(transient_lock);
-  transient.insert(std::make_pair(attr_name, origin));
-}
-
-/**
- * When this request is called the query object is immediately populated.
- * Afterwards any updates that arrive that match the query criteria are
- * added into the standing query.
- */
-StandingQuery SQLite3WorldModel::requestStandingQuery(const world_model::URI& uri,
-    std::vector<std::u16string>& desired_attributes, bool get_data) {
-	StandingQuery sq(cur_state, uri, desired_attributes, get_data);
-	std::cerr<<"Got a standing query\n";
-	return sq;
-}
 

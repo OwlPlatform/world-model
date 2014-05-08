@@ -790,7 +790,7 @@ bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::ve
           current_update[uri].push_back(creation_attr);
         }
         else {
-          //Don't insert anything from ths URI
+          //Don't insert anything from this URI
           entries.clear();
         }
       }
@@ -839,23 +839,27 @@ bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::ve
   //std::cerr<<"DB insertion time was "<<time_diff<<'\n';
   //time_start = world_model::getGRAILTime();
 
-  //Now service standing queries with anything that has updated the
-  //current state of the world model. Re-insert additions to the
-  //transient values here.
-  for (auto I = transients.begin(); I != transients.end(); ++I) {
-    std::vector<world_model::Attribute>& attrs = current_update[I->first];
-    attrs.insert(attrs.end(), I->second.begin(), I->second.end());
-  }
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
+  auto push = [&](StandingQuery* sq) {
     //First see what items are of interest. This also tells the standing
     //query to remember partial matches so we do not need to keep feeding
     //it the current state, only the updates.
     auto ws = sq->showInterested(current_update);
     //Insert the data.
-    sq->insertData(ws);
-  }
+    if (not ws.empty()) {
+      std::cerr<<"Inserting "<<ws.size()<<" entries for the standing query.\n";
+      sq->insertData(ws);
+    }
+    //Insert transients separately from normal data to enforce exact string matching
+    ws = sq->showInterestedTransient(transients);
+    if (not ws.empty()) {
+      std::cerr<<"Inserting "<<ws.size()<<" transient entries for the standing query.\n";
+      sq->insertData(ws);
+    }
+  };
+  StandingQuery::for_each(push);
+  //TODO FIXME Shorter if StandingQuery::offerData handled transient data.
+  //Send data to the standing queries
+  //StandingQuery::offerData(current_update, false, false);
   //time_diff = world_model::getGRAILTime() - time_start;
   //std::cerr<<"Standing query insertion time was "<<time_diff<<'\n';
 
@@ -880,12 +884,10 @@ void MysqlWorldModel::expireURI(world_model::URI uri, world_model::grail_time ex
   //Send this task to a query thread
   WorldModel::world_state result = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this expiration
-    sq->expireURI(uri, expires);
-  }
+  //Offer a world state with the expiration date set to indicate expiration.
+  WorldState changed_entry;
+  changed_entry[uri] = to_expire;
+  StandingQuery::offerData(changed_entry, false, true);
 }
 
 void MysqlWorldModel::expireURIAttributes(world_model::URI uri, std::vector<world_model::Attribute>& entries, world_model::grail_time expires) {
@@ -926,12 +928,11 @@ void MysqlWorldModel::expireURIAttributes(world_model::URI uri, std::vector<worl
   //Send this task to a query thread
   WorldModel::world_state result = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this expiration
-    sq->expireURIAttributes(uri, entries, expires);
-  }
+  //Offer a world state with the expiration date of attributes set to indicate
+  //their expiration.
+  WorldState changed_entry;
+  changed_entry[uri] = entries;
+  StandingQuery::offerData(changed_entry, true, false);
 }
 
 void MysqlWorldModel::deleteURI(world_model::URI uri) {
@@ -952,13 +953,13 @@ void MysqlWorldModel::deleteURI(world_model::URI uri) {
   std::function<WorldModel::world_state(MYSQL*)> bound_fun = [&](MYSQL* handle){ return this->_deleteURI(uri, handle);};
   //Send this task to a thread in the thread pool
   WorldModel::world_state result = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
-
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this expiration
-    sq->expireURI(uri, -1);
-  }
+  
+  //Deletions are the same as expirations from the standing query's perspective
+  //Offer a world state with the expiration date set to indicate expiration.
+  WorldState changed_entry;
+  world_model::Attribute expiration{u"creation", -1, -1, u"", {}};
+  changed_entry[uri].push_back(expiration);
+  StandingQuery::offerData(changed_entry, false, true);
 }
 
 void MysqlWorldModel::deleteURIAttributes(world_model::URI uri, std::vector<world_model::Attribute> entries) {
@@ -1002,162 +1003,13 @@ void MysqlWorldModel::deleteURIAttributes(world_model::URI uri, std::vector<worl
   //Send this task to a thread in the thread pool
   WorldModel::world_state result = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
 
-  //Lock the standing queries so they don't get deleted while we insert data
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  for (auto sq = standing_queries.begin(); sq != standing_queries.end(); ++sq) {
-    //See if the standing query cares about this deletion
-    //Deletions are the same as expirations from the standing queries perspective
-    sq->expireURIAttributes(uri, entries, -1);
-  }
-}
-
-WorldModel::world_state MysqlWorldModel::currentSnapshot(const URI& uri,
-                                                         vector<u16string>& desired_attributes,
-                                                         bool get_data) {
-  //Return if nothing was requested
-  if (desired_attributes.empty()) {
-    return WorldModel::world_state();
-  }
-  //Find which URIs match the given search string
-  std::vector<world_model::URI> matches = searchURI(uri);
-
-  world_state result;
-  if (0 < matches.size()) {
-    //Make a regular expression for each attribute
-    //First build the expressions
-    std::vector<regex_t> expressions;
-    for (auto exp_str = desired_attributes.begin(); exp_str != desired_attributes.end(); ++exp_str) {
-      regex_t exp;
-      int err = regcomp(&exp, std::string(exp_str->begin(), exp_str->end()).c_str(), REG_EXTENDED);
-      if (0 != err) {
-        std::cerr<<"Error compiling regular expression "<<std::string(exp_str->begin(), exp_str->end())<<" in attribute of snapshot request.\n";
-      }
-      else {
-        expressions.push_back(exp);
-      }
-    }
-    //Flag the access control so that this read does not conflict with a write.
-    SemaphoreFlag flag(access_control);
-    
-    //Find the attributes of interest for each URI
-    //Attributes search have an AND relationship - this URI's results are only
-    //returned if all of the attribute search have matches.
-    for (auto uri_match = matches.begin(); uri_match != matches.end(); ++uri_match) {
-      //Make a reference to the URI's attributes for ease of access
-      std::vector<world_model::Attribute>& attributes = cur_state[*uri_match];
-      std::vector<world_model::Attribute> matched_attributes;
-      std::vector<bool> attr_matched(expressions.size());
-      //Check each of this URI's attributes to see if it was requested
-      for (auto attr = attributes.begin(); attr != attributes.end(); ++attr) {
-        //This is a desired attribute if it appears in the attributes list
-        //Also return this attribute if no attributes were specified
-        //Check for a match that consumes the entire string
-        //TODO Should also check origins here
-        //Count which search expressions match
-        bool matched = false;
-        for (size_t search_ind = 0; search_ind < expressions.size(); ++search_ind) {
-          //Use regex matching
-          regmatch_t pmatch;
-          int match = regexec(&expressions[search_ind], std::string(attr->name.begin(), attr->name.end()).c_str(), 1, &pmatch, 0);
-          if (0 == match and 0 == pmatch.rm_so and attr->name.size() == pmatch.rm_eo) {
-            attr_matched[search_ind] = true;
-            matched = true;
-          }
-        }
-        if (matched) {
-          if (get_data) {
-            matched_attributes.push_back(*attr);
-          }
-          else {
-            matched_attributes.push_back(
-                Attribute{attr->name, attr->creation_date, attr->expiration_date, attr->origin, Buffer{}});
-          }
-        }
-      }
-      //If all of the desired attributes were matched then return this URI
-      //and its attributes to the user.
-      if (std::none_of(attr_matched.begin(), attr_matched.end(), [&](const bool& b) { return not b;})) {
-        result[*uri_match] = matched_attributes;
-      }
-    }
-    //Free the memory used in the regex
-    std::for_each(expressions.begin(), expressions.end(), [&](regex_t& exp) { regfree(&exp);});
-  }
-  return result;
-  /* TODO FIXME Use the in-memory search from above, or the mysql call below?
-  //Obtain a handle from the connection pool
-  MYSQL* handle = getConnection();
-  //Return if we cannot get a connection
-  if (nullptr == handle) {
-    return WorldModel::world_state();
-  }
-  //CREATE PROCEDURE getCurrentValue(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
-                                   //attribute VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
-                                   //origin VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
-  std::string statement_str = "CALL getCurrentValue(?, ?, ?);";
-  MYSQL_STMT* statement_p = mysql_stmt_init(handle);
-  if (nullptr == statement_p) {
-    //TODO This should be better at handling an error.
-    std::cerr<<"Error creating statement for current snapshot.\n";
-    return WorldModel::world_state();
-  }
-  if (mysql_stmt_prepare(statement_p, statement_str.c_str(), statement_str.size())) {
-    std::cerr<<"Failed to prepare statement: "<<statement_str<<": "<<mysql_error(handle)<<'\n';
-    return WorldModel::world_state();
-  }
-  MYSQL_BIND parameters[3];
-  memset(parameters, 0, sizeof(parameters));
-  std::string char8_uri(uri.begin(), uri.end());
-  parameters[0].buffer_type = MYSQL_TYPE_STRING;
-  parameters[0].buffer = (void*)char8_uri.data();
-  unsigned long uri_len = char8_uri.size();
-  parameters[0].length = &uri_len;
-  parameters[0].is_unsigned = true;
-  parameters[1].buffer_type = MYSQL_TYPE_STRING;
-  unsigned long attr_len;
-  parameters[1].length = &attr_len;
-  parameters[1].is_unsigned = true;
-  //TODO FIXME Accepting any origin right now
-  std::string char8_origin = ".*";
-  parameters[2].buffer_type = MYSQL_TYPE_STRING;
-  parameters[2].buffer = (void*)char8_origin.data();
-  unsigned long origin_len = char8_origin.size();
-  parameters[2].length = &origin_len;
-
-  WorldModel::world_state result;
-  for (std::u16string attr : desired_attributes) {
-    //parameters[1].buffer = (void*)attr.data();
-    //attr_len = attr.size()*2;
-    std::string char8_name(attr.begin(), attr.end());
-    parameters[1].buffer = (void*)char8_name.data();
-    attr_len = char8_name.size();
-    if (0 != mysql_stmt_bind_param(statement_p, parameters)) {
-      parameters[1].buffer = (void*)uri.data();
-      //TODO This should be better at handling an error.
-      std::cerr<<"Error binding variables for getCurrentValue.\n";
-    }
-    else {
-      //Execute the statement
-      //std::cerr<<"Executing getCurrentValue for "+std::string(attr.begin(), attr.end())+"\n";
-      WorldModel::world_state partial = fetchWorldData(statement_p, handle);
-      for (auto I : partial) {
-        //Insert new attributes into the world state
-        result[I.first].insert(result[I.first].end(), I.second.begin(), I.second.end());
-      }
-    }
-    mysql_stmt_reset(statement_p);
-  }
-  //std::cerr<<"Finished fetching world data\n";
-
-  //Delete the statement
-  mysql_stmt_close(statement_p);
-
-  //Return the connection to the connection pool
-  returnConnection(handle);
-
-  //Return all of the results
-  return result;
-  */
+  
+  //Deletions are the same as expirations from the standing query's perspective
+  //Offer a world state with the expiration date of attributes set to indicate
+  //their expiration.
+  WorldState changed_entry;
+  changed_entry[uri] = entries;
+  StandingQuery::offerData(changed_entry, true, false);
 }
 
 void bindSQL(MYSQL_BIND* bind, unsigned long* length, my_bool* error, my_bool* is_null, std::string& str) {
@@ -1519,29 +1371,4 @@ WorldModel::world_state MysqlWorldModel::historicDataInRange(const world_model::
   return result;
 }
 
-//Register an attribute name as a transient type. Transient types are not
-//stored in the SQL table but are stored in the cur_state map.
-void MysqlWorldModel::registerTransient(std::u16string& attr_name, std::u16string& origin) {
-  std::unique_lock<std::mutex> lck(transient_lock);
-  transient.insert(std::make_pair(attr_name, origin));
-}
-
-/**
- * When this request is called the query object is immediately populated.
- * Afterwards any updates that arrive that match the query criteria are
- * added into the standing query.
- */
-QueryAccessor MysqlWorldModel::requestStandingQuery(const world_model::URI& uri,
-    std::vector<std::u16string>& desired_attributes, bool get_data) {
-  std::unique_lock<std::mutex> lck(sq_mutex);
-  standing_queries.push_front(StandingQuery(uri, desired_attributes, get_data));
-  //Populate the query
-  //Flag the access control so that this read does not conflict with a write.
-  SemaphoreFlag flag(access_control);
-  //Indicate that multiple origins are used when checking interest so that
-  //the standing query does not try to optimize the check based upon origins.
-  world_state ws = standing_queries.front().showInterested(cur_state, true);
-  standing_queries.front().insertData(ws);
-  return QueryAccessor(&standing_queries, &sq_mutex, standing_queries.begin());
-}
 
