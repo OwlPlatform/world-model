@@ -54,6 +54,13 @@ WMDebug& operator<<(WMDebug& dbg, T arg) {
 
 WMDebug debug;
 
+//Destructor
+WorldModel::~WorldModel() {
+	//Nothing to clean up.
+	//If regex patterns are moved into the base class then they would be cleaned
+	//here.
+}
+
 WorldModel::world_state WorldModel::currentSnapshot(const URI& uri,
                                                     vector<u16string>& desired_attributes,
                                                     bool get_data) {
