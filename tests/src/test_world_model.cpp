@@ -1358,7 +1358,7 @@ int main(int argc, char** argv) {
   }
 
   //Test that standing queries will get an update when a match is expired
-  cerr<<"Testing that standing queries find update when items are expired...\t";
+  cerr<<"Testing that standing queries find updates when items are expired...\t";
   {
     WorldModel* wm = makeWM(makeFilename());
     vector<u16string> search_atts{u"att3"};
@@ -1381,7 +1381,7 @@ int main(int argc, char** argv) {
   }
 
   //Test that standing queries will get an update when a match is deleted
-  cerr<<"Testing that standing queries find update when items are deleted...\t";
+  cerr<<"Testing that standing queries find updates when items are deleted...\t";
   {
     WorldModel* wm = makeWM(makeFilename());
     vector<u16string> search_atts{u"att3"};
