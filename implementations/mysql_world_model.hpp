@@ -34,11 +34,6 @@ class MysqlWorldModel : public WorldModel {
     std::string db_name;
     std::string user;
     std::string password;
-    
-    //Do not store transient types in a database.
-    //Recognize types by a unique attribute name and origin pair
-    std::mutex transient_lock;
-    std::set<std::pair<std::u16string, std::u16string>> transient;
 
     //Update expiration dates in the database.
     WorldModel::world_state databaseUpdate(world_model::URI& uri,
