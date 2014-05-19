@@ -893,6 +893,8 @@ string makeFilename() {
 int main(int argc, char** argv) {
   uint32_t num_cycles = 100;
   std::function<WorldModel* (std::string)> makeWM;
+	//Make sure that different random names are generated each time this is run
+	srand(time(NULL));
 
   std::string username("username");
   std::string password("password");
@@ -959,6 +961,7 @@ int main(int argc, char** argv) {
       }
     }
   }
+
   //Use the random number generator to make filenames for databases
   srandom(time(NULL));
   cerr<<"Testing URI search...\t";

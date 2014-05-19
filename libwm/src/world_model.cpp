@@ -91,7 +91,7 @@ WorldModel::world_state WorldModel::currentSnapshot(const URI& uri,
     SemaphoreFlag flag(access_control);
     
     //Find the attributes of interest for each URI
-    //Attributes search have an AND relationship - this URI's results are only
+    //Attributes search have an AND relationship - this identifier's results are only
     //returned if all of the attribute search have matches.
     for (auto uri_match = matches.begin(); uri_match != matches.end(); ++uri_match) {
       //Make a reference to the URI's attributes for ease of access

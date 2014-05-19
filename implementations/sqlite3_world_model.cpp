@@ -507,6 +507,7 @@ bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::
             sqlite3_bind_text16(statement_p, 3, entry->name.data(), 2*entry->name.size(), SQLITE_STATIC);
             sqlite3_bind_text16(statement_p, 4, entry->origin.data(), 2*entry->origin.size(), SQLITE_STATIC);
             world_state result = fetchWorldData(statement_p);
+
             //No result? then the expiration is equal to the earliest creation date of this attribute
             if (result.size() == 0) {
               std::string statement_str2 = std::string("SELECT uri, name, creation_date, ")+

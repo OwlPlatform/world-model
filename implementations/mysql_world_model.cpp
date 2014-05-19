@@ -318,6 +318,8 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
   std::vector<std::string> tables{"AttributeValues.mysql", "Attributes.mysql",
                              "Origins.mysql", "Uris.mysql"};
   for (std::string& tname : tables) {
+		//TODO FIXME There should be a compile-time define specifying the root
+		//directory to search for the mysql proc files.
     std::string fname = directory + "table/" + tname;
     std::ifstream file(fname.c_str());
     std::string cmd;
@@ -756,7 +758,6 @@ bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::ve
       }
     }
   }
-  //TODO FIXME Send transients to any standing queries
 
   //Remember any attributes that need to be expired
   //and any updates to the current table caused by the
