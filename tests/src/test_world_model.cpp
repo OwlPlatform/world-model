@@ -138,9 +138,9 @@ vector<Attribute> attributes1rest{
 }
 
 //Requires URIs to have been previously created in createAndSearchURIs
-bool checkStandingQueryFour(QueryAccessor& qa) {
+bool checkStandingQueryFour(StandingQuery& sq) {
 
-  WorldModel::world_state ws = qa.getUpdates();
+  WorldModel::world_state ws = sq.getData();
   if (ws.end() == ws.find(uri1)) {
     return false;
   }
@@ -256,9 +256,9 @@ bool insertAndRetrieveData(WorldModel& wm) {
 }
 
 //Should match the results of insertAndRetrieveData
-bool checkStandingQuery(QueryAccessor& qa) {
+bool checkStandingQuery(StandingQuery& sq) {
 
-  WorldModel::world_state ws = qa.getUpdates();
+  WorldModel::world_state ws = sq.getData();
   if (ws.end() == ws.find(uri1)) {
     std::cerr<<"Result empty\n";
     return false;
@@ -290,9 +290,9 @@ bool checkStandingQuery(QueryAccessor& qa) {
 }
 
 //Should match the results of insertAndRetrieveData
-bool checkStandingQueryPartial(QueryAccessor& qa) {
+bool checkStandingQueryPartial(StandingQuery& sq) {
 
-  WorldModel::world_state ws = qa.getUpdates();
+  WorldModel::world_state ws = sq.getData();
   if (ws.end() == ws.find(uri1)) {
     std::cerr<<"Result empty\n";
     return false;
@@ -328,9 +328,9 @@ bool checkStandingQueryPartial(QueryAccessor& qa) {
 }
 
 //Should have only an update to att3
-bool checkStandingQueryPartial2(QueryAccessor& qa) {
+bool checkStandingQueryPartial2(StandingQuery& sq) {
 
-  WorldModel::world_state ws = qa.getUpdates();
+  WorldModel::world_state ws = sq.getData();
   if (ws.end() == ws.find(uri1)) {
     std::cerr<<"Result empty\n";
     return false;
@@ -360,9 +360,9 @@ bool checkStandingQueryPartial2(QueryAccessor& qa) {
 }
 
 //Should match the results of insertAndRetrieveData, but expire time should be non-zero
-bool checkExpiredStandingQuery(QueryAccessor& qa) {
+bool checkExpiredStandingQuery(StandingQuery& sq) {
 
-  WorldModel::world_state ws = qa.getUpdates();
+  WorldModel::world_state ws = sq.getData();
   if (ws.end() == ws.find(uri1)) {
     std::cerr<<"Failed checkExpiredStandingQuery: Result empty\n";
     return false;
@@ -441,9 +441,9 @@ bool insertAndRetrieveData2(WorldModel& wm) {
 }
 
 //Should match the results of insertAndRetrieveData2
-bool checkStandingQuery2(QueryAccessor& qa) {
+bool checkStandingQuery2(StandingQuery& sq) {
 
-  WorldModel::world_state ws = qa.getUpdates();
+  WorldModel::world_state ws = sq.getData();
   if (ws.end() == ws.find(uri1)) {
     std::cerr<<"Result empty\n";
     return false;
@@ -1233,13 +1233,13 @@ int main(int argc, char** argv) {
     vector<u16string> search_atts{u"att3"};
     wm->registerTransient(attributes1[2].name, attributes1[2].origin);
     {
-      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
 
       if (createAndSearchURIs(*wm) and
           not insertAndRetrieveData(*wm) and  //att3 is transient so won't show up
-          checkStandingQuery(qa) and          //att3 should show up in the standing query
+          checkStandingQuery(sq) and          //att3 should show up in the standing query
           not insertAndRetrieveData2(*wm) and //again, att3 shouldn't show up
-          checkStandingQuery2(qa)) {          //att3 should appear again
+          checkStandingQuery2(sq)) {          //att3 should appear again
         cerr<<"Pass\n";
       }
       else {
@@ -1267,15 +1267,15 @@ int main(int argc, char** argv) {
     vector<Attribute> attr_update3{
         Attribute{u"att3", 120, 0, u"test_world_model", {0,1,2,3}}};
     {
-      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
 
       if (createAndSearchURIs(*wm) and
           wm->insertData(vector<pair<URI, vector<Attribute>>>{make_pair(uri1, attr_update1)}) and
-          not checkStandingQueryPartial(qa) and
+          not checkStandingQueryPartial(sq) and
           wm->insertData(vector<pair<URI, vector<Attribute>>>{make_pair(uri1, attr_update2)}) and
-          checkStandingQueryPartial(qa) and
+          checkStandingQueryPartial(sq) and
           wm->insertData(vector<pair<URI, vector<Attribute>>>{make_pair(uri1, attr_update3)}) and
-          checkStandingQueryPartial2(qa)) {
+          checkStandingQueryPartial2(sq)) {
         cerr<<"Pass\n";
       }
       else {
@@ -1293,12 +1293,12 @@ int main(int argc, char** argv) {
     WorldModel* wm = makeWM(makeFilename());
     vector<u16string> search_atts{u"att3"};
     {
-      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
 
       if (createAndSearchURIs(*wm) and
           insertAndRetrieveData(*wm) and
           insertAndRetrieveData2(*wm) and
-          checkStandingQuery2(qa)) {
+          checkStandingQuery2(sq)) {
         cerr<<"Pass\n";
       }
       else {
@@ -1317,8 +1317,8 @@ int main(int argc, char** argv) {
     {
       if (createAndSearchURIs(*wm) and
           insertAndRetrieveData(*wm)) {
-        QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
-        if (checkStandingQuery(qa)) {
+        StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
+        if (checkStandingQuery(sq)) {
           cerr<<"Pass\n";
         }
         else {
@@ -1340,13 +1340,13 @@ int main(int argc, char** argv) {
     WorldModel* wm = makeWM(makeFilename());
     vector<u16string> search_atts{u"att1", u"att2", u"att5", u"att6"};
     {
-      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
 
       if (createAndSearchURIs(*wm) and
           insertHalfAttributes(*wm) and
-          not checkStandingQueryFour(qa) and //Not done yet so should fail
+          not checkStandingQueryFour(sq) and //Not done yet so should fail
           insertHalfAttributes2(*wm) and
-          checkStandingQueryFour(qa)) {
+          checkStandingQueryFour(sq)) {
         cerr<<"Pass\n";
       }
       else {
@@ -1363,13 +1363,13 @@ int main(int argc, char** argv) {
     WorldModel* wm = makeWM(makeFilename());
     vector<u16string> search_atts{u"att3"};
     {
-      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
       //TODO FIXME
       if (createAndSearchURIs(*wm) and
           insertAndRetrieveData(*wm) and
-          checkStandingQuery(qa) and
+          checkStandingQuery(sq) and
           testExpireURI1(*wm) and
-          checkExpiredStandingQuery(qa)) {
+          checkExpiredStandingQuery(sq)) {
         cerr<<"Pass\n";
       }
       else {
@@ -1386,13 +1386,13 @@ int main(int argc, char** argv) {
     WorldModel* wm = makeWM(makeFilename());
     vector<u16string> search_atts{u"att3"};
     {
-      QueryAccessor qa = wm->requestStandingQuery(uri1, search_atts, true);
+      StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
       //TODO FIXME
       if (createAndSearchURIs(*wm) and
           insertAndRetrieveData(*wm) and
-          checkStandingQuery(qa) and
+          checkStandingQuery(sq) and
           testDeleteURI(*wm) and
-          checkExpiredStandingQuery(qa)) {
+          checkExpiredStandingQuery(sq)) {
         cerr<<"Pass\n";
       }
       else {
