@@ -11,5 +11,5 @@ In order to use to the msyql world model, you must of course first have mysql or
 3. Configure passwords and such to secure your databases.
    sudo mysql_secture_installation
 4. Create a user for the system. This is an example:
-   CREATE USER 'owl'@'localhost' IDENTIFIED BY 'owlz';
+   CREATE USER 'owl'@'localhost' IDENTIFIED BY 'password';
    GRANT SELECT, INSERT, UPDATE, DELETE, INDEX, ALTER ROUTINE, CREATE ROUTINE, CREATE, DROP ON *.* TO 'owl'@'localhost';
