@@ -962,6 +962,11 @@ int main(int argc, char** argv) {
       }
     }
   }
+	
+	//Use this for debugging specific tests (move the tests_start tag)
+	goto tests_start;
+
+tests_start:
 
   //Use the random number generator to make filenames for databases
   srandom(time(NULL));
@@ -1408,7 +1413,6 @@ int main(int argc, char** argv) {
     
     delete wm;
   }
-
 
   //Test multiple threads inserting values
   cerr<<"Testing threaded insertion...\t";
