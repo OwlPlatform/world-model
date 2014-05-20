@@ -876,6 +876,7 @@ void MysqlWorldModel::expireURI(world_model::URI uri, world_model::grail_time ex
     if (cur_state.find(uri) == cur_state.end()) {
       return;
     }
+		//Remove this identifier from the current state
     cur_state.erase(uri);
   }
   std::vector<world_model::Attribute> to_expire(1);
@@ -887,7 +888,8 @@ void MysqlWorldModel::expireURI(world_model::URI uri, world_model::grail_time ex
 
   //Offer a world state with the expiration date set to indicate expiration.
   WorldState changed_entry;
-  changed_entry[uri] = to_expire;
+  world_model::Attribute expiration{u"creation", -1, expires, u"", {}};
+  changed_entry[uri].push_back(expiration);
   StandingQuery::offerData(changed_entry, false, true);
 }
 
@@ -946,7 +948,7 @@ void MysqlWorldModel::deleteURI(world_model::URI uri) {
       return;
     }
 
-    //Delete this URI from the world model
+		//Remove this identifier from the current state
     cur_state.erase(uri);
   }
   //Remove this URI from the database

@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <iostream>
 #include <vector>
+#include <unistd.h>
 
 #include <stdlib.h>
 
@@ -1367,11 +1368,12 @@ int main(int argc, char** argv) {
     vector<u16string> search_atts{u"att3"};
     {
       StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
-      //TODO FIXME
+      //The threaded standing query sleeps for 5ms when there is no data, so sleep longer
       if (createAndSearchURIs(*wm) and
           insertAndRetrieveData(*wm) and
           checkStandingQuery(sq) and
           testExpireURI1(*wm) and
+					not usleep(6000) and
           checkExpiredStandingQuery(sq)) {
         cerr<<"Pass\n";
       }
@@ -1390,11 +1392,12 @@ int main(int argc, char** argv) {
     vector<u16string> search_atts{u"att3"};
     {
       StandingQuery sq = wm->requestStandingQuery(uri1, search_atts, true);
-      //TODO FIXME
+      //The threaded standing query sleeps for 5ms when there is no data, so sleep longer
       if (createAndSearchURIs(*wm) and
           insertAndRetrieveData(*wm) and
           checkStandingQuery(sq) and
           testDeleteURI(*wm) and
+					not usleep(6000) and
           checkExpiredStandingQuery(sq)) {
         cerr<<"Pass\n";
       }
@@ -1406,7 +1409,7 @@ int main(int argc, char** argv) {
     delete wm;
   }
 
-  /*
+
   //Test multiple threads inserting values
   cerr<<"Testing threaded insertion...\t";
   {
@@ -1459,7 +1462,6 @@ int main(int argc, char** argv) {
     }
     delete wm;
   }
-  */
 
   return 0;
 }

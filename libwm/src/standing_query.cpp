@@ -34,7 +34,6 @@
 using std::u16string;
 using world_model::WorldState;
 
-
 //Input/output queue. Input from solver threads, output to standing query thread
 std::mutex StandingQuery::solver_data_mutex;
 std::queue<StandingQuery::Update> StandingQuery::solver_data;
@@ -97,7 +96,7 @@ void StandingQuery::dataProcessingLoop() {
 					}
 					else if (update.invalidate_objects) {
 						for (auto& I : update.state) {
-							//There should only a single update to the creation attribute
+							//Invalidating an ID requires an update to the creation attribute
 							if (not I.second.empty() and I.second[0].name == u"creation") {
 								sq->invalidateObject(I.first, I.second[0]);
 							}
@@ -622,11 +621,12 @@ void StandingQuery::invalidateObject(world_model::URI name, world_model::Attribu
   //If this data is in the current state then expire all of the attributes
   if (state != cur_state.end()) {
     std::for_each(state->second.begin(), state->second.end(), [&](world_model::Attribute& attr) {
-				//Remove this from the cached matches and set an expiration date in the current state
+				//Remove this from the cached matches of this identifier and set an
+				//expiration date in the current state
         current_matches[name].erase(attr.name);
         attr.expiration_date = creation.expiration_date; });
   }
-	//The attributes of the expired URI that were in the current state were
+	//The attributes of the expired identifier that were in the current state were
 	//expired, but now make sure that all attributes ever sent from this request
 	//are also expired.
   if (current_matches.end() != current_matches.find(name)) {
