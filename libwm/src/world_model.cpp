@@ -79,7 +79,9 @@ WorldModel::world_state WorldModel::currentSnapshot(const URI& uri,
     std::vector<regex_t> expressions;
     for (auto exp_str = desired_attributes.begin(); exp_str != desired_attributes.end(); ++exp_str) {
       regex_t exp;
-      int err = regcomp(&exp, std::string(exp_str->begin(), exp_str->end()).c_str(), REG_EXTENDED);
+      //Need a variable to hold the memory for the c string in regexec call
+      std::string tmp_str(exp_str->begin(), exp_str->end());
+      int err = regcomp(&exp, tmp_str.c_str(), REG_EXTENDED);
       if (0 != err) {
         debug<<"Error compiling regular expression "<<std::string(exp_str->begin(), exp_str->end())<<" in attribute of snapshot request.\n";
       }
@@ -109,7 +111,9 @@ WorldModel::world_state WorldModel::currentSnapshot(const URI& uri,
         for (size_t search_ind = 0; search_ind < expressions.size(); ++search_ind) {
           //Use regex matching
           regmatch_t pmatch;
-          int match = regexec(&expressions[search_ind], std::string(attr->name.begin(), attr->name.end()).c_str(), 1, &pmatch, 0);
+          //Need a variable to hold the memory for the c string in regexec call
+          std::string tmp_str(attr->name.begin(), attr->name.end());
+          int match = regexec(&expressions[search_ind], tmp_str.c_str(), 1, &pmatch, 0);
           if (0 == match and 0 == pmatch.rm_so and attr->name.size() == pmatch.rm_eo) {
             attr_matched[search_ind] = true;
             matched = true;
