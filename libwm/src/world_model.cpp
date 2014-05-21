@@ -83,7 +83,7 @@ WorldModel::world_state WorldModel::currentSnapshot(const URI& uri,
       std::string tmp_str(exp_str->begin(), exp_str->end());
       int err = regcomp(&exp, tmp_str.c_str(), REG_EXTENDED);
       if (0 != err) {
-        debug<<"Error compiling regular expression "<<std::string(exp_str->begin(), exp_str->end())<<" in attribute of snapshot request.\n";
+        debug<<"Error compiling regular expression "<<tmp_str<<" in attribute of snapshot request.\n";
       }
       else {
         expressions.push_back(exp);

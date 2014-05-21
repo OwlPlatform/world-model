@@ -80,7 +80,8 @@ std::vector<world_model::URI> MysqlWorldModel::searchURI(const std::u16string& g
   //Build a regular expression from the glob and search for matches in the
   //keys of the world_state map.
   regex_t exp;
-  int err = regcomp(&exp, std::string(glob.begin(), glob.end()).c_str(), REG_EXTENDED);
+	std::string glob_str(glob.begin(), glob.end());
+  int err = regcomp(&exp, glob_str.c_str(), REG_EXTENDED);
   //Return no results if the expression did not compile.
   //TODO Should indicate error but throwing an exception might be overboard.
   if (0 != err) {
@@ -95,7 +96,8 @@ std::vector<world_model::URI> MysqlWorldModel::searchURI(const std::u16string& g
   for (auto I = cur_state.begin(); I != cur_state.end(); ++I) {
     //Check each match to make sure it consumes the whole string
     regmatch_t pmatch;
-    int match = regexec(&exp, std::string(I->first.begin(), I->first.end()).c_str(), 1, &pmatch, 0);
+		std::string match_str = std::string(I->first.begin(), I->first.end());
+    int match = regexec(&exp, match_str.c_str(), 1, &pmatch, 0);
     if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
       //debug<<"Matched "<<std::string(I->first.begin(), I->first.end())<<'\n';
       result.push_back(I->first);

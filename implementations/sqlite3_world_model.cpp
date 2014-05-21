@@ -54,7 +54,8 @@ std::vector<world_model::URI> SQLite3WorldModel::searchURI(const std::u16string&
   //Build a regular expression from the glob and search for matches in the
   //keys of the world_state map.
   regex_t exp;
-  int err = regcomp(&exp, std::string(glob.begin(), glob.end()).c_str(), REG_EXTENDED);
+	std::string glob_str(glob.begin(), glob.end());
+  int err = regcomp(&exp, glob_str.c_str(), REG_EXTENDED);
   //Return no results if the expression did not compile.
   //TODO Should indicate error but throwing an exception might be overboard.
   if (0 != err) {
@@ -69,7 +70,8 @@ std::vector<world_model::URI> SQLite3WorldModel::searchURI(const std::u16string&
   for (auto I = cur_state.begin(); I != cur_state.end(); ++I) {
     //Check each match to make sure it consumes the whole string
     regmatch_t pmatch;
-    int match = regexec(&exp, std::string(I->first.begin(), I->first.end()).c_str(), 1, &pmatch, 0);
+		std::string match_str = std::string(I->first.begin(), I->first.end());
+    int match = regexec(&exp, match_str.c_str(), 1, &pmatch, 0);
     if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
       //debug<<"Matched "<<std::string(I->first.begin(), I->first.end())<<'\n';
       result.push_back(I->first);
@@ -92,7 +94,8 @@ void SQLite3WorldModel::currentUpdate(world_model::URI uri, std::vector<world_mo
         "(creation_date, expiration_date, uri, name, origin) values (?1, ?2, ?3, ?4, ?5);";
       sqlite3_stmt* statement_p;
       //Prepare the statement
-      sqlite3_prepare_v2(db_handle, insert_stream.str().c_str(), -1, &statement_p, NULL);
+      std::string insert_string = insert_stream.str();
+      sqlite3_prepare_v2(db_handle, insert_string.c_str(), -1, &statement_p, NULL);
       //Bind this attribute's parameters.
       sqlite3_bind_int64(statement_p, 1, entry->creation_date);
       sqlite3_bind_int64(statement_p, 2, entry->expiration_date);
@@ -125,7 +128,8 @@ void SQLite3WorldModel::databaseUpdate(world_model::URI uri, std::vector<world_m
        "uri = ?2 AND name = ?3 AND creation_date = ?4 AND origin = ?5;";
       sqlite3_stmt* statement_p;
       //Prepare the statement
-      sqlite3_prepare_v2(db_handle, insert_stream.str().c_str(), -1, &statement_p, NULL);
+      std::string insert_string = insert_stream.str();
+      sqlite3_prepare_v2(db_handle, insert_string.c_str(), -1, &statement_p, NULL);
       //Bind this attribute's parameters.
       sqlite3_bind_int64(statement_p, 1, entry->expiration_date);
       sqlite3_bind_text16(statement_p, 2, uri.data(), 2*uri.size(), SQLITE_STATIC);
