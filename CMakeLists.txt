@@ -6,8 +6,14 @@ set (LibOwlWM_VERSION_MAJOR 1)
 set (LibOwlWM_VERSION_MINOR 0)
 set (LibOwlWM_VERSION_REVISION 0)
 
+#Use these to change to clang for the compiler (or set the CC and CXX variables)
+#SET (CMAKE_C_COMPILER "/usr/bin/clang")
+#SET (CMAKE_CXX_COMPILER "/usr/bin/clang++")
+
 #Use optimization level three for the world model libraries
 set(CMAKE_CXX_FLAGS "-O3 -std=c++0x -Wall -Wextra -Wno-sign-compare")
+#Use this to switch to building debugging code
+#set(CMAKE_CXX_FLAGS "--debug -g -std=c++0x -Wall -Wextra -Wno-sign-compare")
 
 FIND_PATH(OWL_INC_DIR NAMES owl PATHS /usr/include /usr/local/include)
 IF(NOT OWL_INC_DIR)
@@ -50,8 +56,6 @@ INSTALL( FILES ${CMAKE_CURRENT_BINARY_DIR}/owlwm.pc DESTINATION ${PKGCONFIG_INST
 
 #Note that not all distributions put init script in /etc/init.d (Slackware is in /etc/rc.d)
 INSTALL( FILES ${OwlWM_SOURCE_DIR}/scripts/rc.owl-world-model PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE DESTINATION /etc/init.d )
-
-#$(LIBDIR)/libowl.a: $(LIBDIR)/sensor_aggregator_protocol.o $(LIBDIR)/aggregator_solver_protocol.o $(LIBDIR)/world_model_protocol.o $(LIBDIR)/netbuffer.o $(LIBDIR)/sample_data.o $(LIBDIR)/simple_sockets.o
 
 # uninstall target
 configure_file(
