@@ -210,10 +210,15 @@ StandingQuery::StandingQuery(WorldState& cur_state, const world_model::URI& uri,
 
 ///Free memory from regular expressions
 StandingQuery::~StandingQuery() {
+  std::cerr<<"Deleteing standing query.\n";
   if (regex_valid) {
+    std::cerr<<"Deleting standing query's regex.\n";
     regfree(&uri_regex);
+    std::cerr<<"Deleted standing query's regex!\n";
     for (auto J = attr_regex.begin(); J != attr_regex.end(); ++J) {
+      std::cerr<<"Deleting standing query's attributes regex.\n";
       regfree(&(J->second));
+      std::cerr<<"Deleted standing query's attributes regex!\n";
     }
   }
   //Remove this standing query into the subscriptions set so that it no longer
