@@ -147,7 +147,7 @@ class ClientConnection : public ThreadConnection {
       StandingQuery sq;
       RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, StandingQuery sq) : sq(sq) {
 				std::cerr<<"Constructing request state\n";
-        interval = interval;
+        this->interval = interval;
         search_uri = uri;
         desired_attributes = attributes;
         ticket_number = ticket;
