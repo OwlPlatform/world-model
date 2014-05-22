@@ -795,7 +795,7 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
 
   for (size_t cycle = 1; cycle <= num_read_write; ++cycle) {
     //Insert data
-    attributes[0].creation_date = cycle;
+    attributes.at(0).creation_date = cycle;
     //grail_time before = duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
     //wm.insertData(uri1, attributes);
     wm.insertData(vector<pair<URI, vector<Attribute>>>{make_pair(uri1, attributes)});
@@ -808,21 +808,21 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
       if (ws.end() == ws.find(uri1)) {
         std::cerr<<"Thread failed current snapshot\n";
         *success = false;
-        return;
+        //return;
       }
       else {
-        vector<Attribute> found = ws[uri1];
-        if (found.size() == 1 and
-            found[0].name == att_name and
-            found[0].data.size() == attributes[0].data.size() and
-            equal(found[0].data.begin(), found[0].data.end(), attributes[0].data.begin())) {
+        WorldModel::world_state::const_iterator found = ws.find(uri1);
+        if (ws.count(uri1) == 1 and
+            found->second.at(0).name == att_name and
+            found->second.at(0).data.size() == attributes.at(0).data.size() and
+            equal(found->second.at(0).data.begin(), found->second.at(0).data.end(), attributes.at(0).data.begin())) {
           //std::cerr<<"Time to current snapshot: "<<duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() - before<<'\n';
           ;
         }
         else {
           std::cerr<<"Thread failed current snapshot\n";
           *success = false;
-          return;
+          //return;
         }
       }
     }
@@ -832,7 +832,7 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
         if (ws.end() == ws.find(uri1)) {
           std::cerr<<"Thread failed range request\n";
           *success = false;
-          return;
+          //return;
         }
         else {
           vector<Attribute> found = ws[uri1];
@@ -841,7 +841,7 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
               not all_of(found.begin(), found.end(), [&](Attribute& att) { return att.name == att_name;})) {
             std::cerr<<"Thread failed range request\n";
             *success = false;
-            return;
+            //return;
           }
           //std::cerr<<"Time to data in range: "<<duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() - before<<'\n';
         }
@@ -851,7 +851,7 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
         if (ws.end() == ws.find(uri1)) {
           std::cerr<<"historic snapshot failed to find uri!\n";
           *success = false;
-          return;
+          //return;
         }
         else {
           vector<Attribute> found = ws[uri1];
@@ -879,7 +879,7 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
           else {
             std::cerr<<"Thread failed historic snapshot\n";
             *success = false;
-            return;
+            //return;
           }
         }
       }
@@ -962,12 +962,12 @@ int main(int argc, char** argv) {
       }
     }
   }
-	
-	//Use this for debugging specific tests (move the tests_start tag)
-	goto tests_start;
-
+  
+  //Use this for debugging specific tests (move the tests_start label)
+  goto tests_start;
+  
 tests_start:
-
+  
   //Use the random number generator to make filenames for databases
   srandom(time(NULL));
   cerr<<"Testing URI search...\t";
@@ -1455,7 +1455,8 @@ tests_start:
     bool success = true;
     for (size_t i = 0; i < 10; ++i) {
       string num = to_string(i);
-      test_threads.push_back(thread(readWriteThread, &(*wm), u"att" + u16string(num.begin(), num.end()), num_cycles, &success));
+      u16string u_num = u"att" + u16string(num.begin(), num.end());
+      test_threads.push_back(thread(readWriteThread, &(*wm), u_num, num_cycles, &success));
     }
     for_each(test_threads.begin(), test_threads.end(), [&](thread& t) { t.join();});
     if (success) {
