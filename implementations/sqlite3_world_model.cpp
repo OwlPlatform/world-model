@@ -47,40 +47,6 @@ Debug& operator<<(Debug& dbg, T arg) {
 
 Debug debug;
 
-//Search for URIs in the world model using a glob expression
-std::vector<world_model::URI> SQLite3WorldModel::searchURI(const std::u16string& glob) {
-  //debug<<"Searching for "<<std::string(glob.begin(), glob.end())<<'\n';
-  std::vector<world_model::URI> result;
-  //Build a regular expression from the glob and search for matches in the
-  //keys of the world_state map.
-  regex_t exp;
-	std::string glob_str(glob.begin(), glob.end());
-  int err = regcomp(&exp, glob_str.c_str(), REG_EXTENDED);
-  //Return no results if the expression did not compile.
-  //TODO Should indicate error but throwing an exception might be overboard.
-  if (0 != err) {
-    debug<<"Error compiling regular expression: "<<std::string(glob.begin(), glob.end())<<".\n";
-    return result;
-  }
-
-  //Flag the access control so that this read does not conflict with a write.
-  SemaphoreFlag flag(access_control);
-
-  //Check for a matchs in the URIs and remember any URIs that match
-  for (auto I = cur_state.begin(); I != cur_state.end(); ++I) {
-    //Check each match to make sure it consumes the whole string
-    regmatch_t pmatch;
-		std::string match_str = std::string(I->first.begin(), I->first.end());
-    int match = regexec(&exp, match_str.c_str(), 1, &pmatch, 0);
-    if (0 == match and 0 == pmatch.rm_so and I->first.size() == pmatch.rm_eo) {
-      //debug<<"Matched "<<std::string(I->first.begin(), I->first.end())<<'\n';
-      result.push_back(I->first);
-    }
-  }
-  regfree(&exp);
-  return result;
-}
-
 //Used to update the creation_date and expiration_date fields of uri attributes in the current db
 void SQLite3WorldModel::currentUpdate(world_model::URI uri, std::vector<world_model::Attribute>& entries) {
   if (db_handle != NULL) {

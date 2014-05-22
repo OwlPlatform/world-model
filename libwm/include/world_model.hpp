@@ -120,7 +120,7 @@ class WorldModel {
      * The URI search function returns any URIs in the world model
      * that match the provided regex URI.
      */
-    virtual std::vector<world_model::URI> searchURI(const std::u16string& regexp) = 0;
+    std::vector<world_model::URI> searchURI(const std::u16string& regexp);
 
     /**
      * Get the current state of the world model.
