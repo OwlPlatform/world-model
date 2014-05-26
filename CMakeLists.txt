@@ -57,6 +57,9 @@ INSTALL( FILES ${CMAKE_CURRENT_BINARY_DIR}/owlwm.pc DESTINATION ${PKGCONFIG_INST
 #Note that not all distributions put init script in /etc/init.d (Slackware is in /etc/rc.d)
 INSTALL( FILES ${OwlWM_SOURCE_DIR}/scripts/rc.owl-world-model PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE DESTINATION /etc/init.d )
 
+#Install the configuration script
+INSTALL( FILES ${OwlWM_SOURCE_DIR}/scripts/mysqlwm.conf PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ DESTINATION /etc/owl )
+
 # uninstall target
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
