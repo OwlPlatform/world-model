@@ -1056,34 +1056,38 @@ int main(int ac, char** av) {
 				//verify that the key is valid and store its value
 				//Lines longer than 1000 characters are not valid
 				std::array<char, 1000> buffer;
+				std::fill(buffer.begin(), buffer.end(), 0);
 				in.getline(&buffer[0], 1000);
-				//Find the location of the '=' character
-				char* eq_index = std::find(buffer.begin(), buffer.end(), '=');
-				//Don't try to process a line without the '=' character
-				if (eq_index == buffer.end()) {
-					std::string invalid(buffer.begin(), buffer.end());
-					std::cerr<<"Invalid line in config file at line number "<<line_number<<'\n';
-				}
-				else {
-					std::string key(buffer.begin(), eq_index);
-					std::string value(eq_index, buffer.end());
-					if ("username" == key) {
-						username = value;
-						options_set |= 0x01;
+				//Ignore empty lines
+				if ('\0' != buffer.at(0)) {
+					//Find the location of the '=' character
+					std::array<char, 1000>::iterator eq_index = std::find(buffer.begin(), buffer.end(), '=');
+					//Don't try to process a line without the '=' character
+					if (eq_index == buffer.end()) {
+						std::string invalid(buffer.begin(), buffer.end());
+						std::cerr<<"Invalid line in config file at line number "<<line_number<<'\n';
 					}
-					else if ("password" == key) {
-						password = value;
-						options_set |= 0x02;
-					}
-					else if ("dbname" == key) {
-						db_name = value;
-						options_set |= 0x04;
-					}
-					else if ("solver_port" == key) {
-						solver_port = std::stoi(value);
-					}
-					else if ("client_port" == key) {
-						client_port = std::stoi(value);
+					else {
+						std::string key(buffer.begin(), eq_index);
+						std::string value(eq_index+1, buffer.end());
+						if ("username" == key) {
+							username = value;
+							options_set |= 0x01;
+						}
+						else if ("password" == key) {
+							password = value;
+							options_set |= 0x02;
+						}
+						else if ("dbname" == key) {
+							db_name = value;
+							options_set |= 0x04;
+						}
+						else if ("solver_port" == key) {
+							solver_port = std::stoi(value);
+						}
+						else if ("client_port" == key) {
+							client_port = std::stoi(value);
+						}
 					}
 				}
 			}
@@ -1105,6 +1109,7 @@ int main(int ac, char** av) {
   std::cout<<"Listening for solver on port number "<<solver_port<<'\n';
   std::cout<<"Listening for client on port number "<<client_port<<'\n';
 
+	std::cout<<"Using db "<<db_name<<'\n';
 
   MysqlWorldModel wm(db_name, username, password);
 #endif
