@@ -1,6 +1,7 @@
 SET(Sqlite3SourceFiles
   sqlite3_world_model.cpp
   sqlite_regexp_module.cpp
+	regex_store.cpp
 )
 
 SET(MysqlSourceFiles
