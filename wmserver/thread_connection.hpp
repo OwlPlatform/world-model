@@ -68,8 +68,10 @@ class ThreadConnection {
     ThreadConnection& operator=(const ThreadConnection&) = delete;
     ThreadConnection(const ThreadConnection&) = delete;
 
-    //Time of last socket activity.
+    //Time of last received socket activity.
     time_t last_activity;
+    //Time since the transmitted socket activity.
+    time_t last_sent;
 
   public:
     //Maximum duration of socket inactivity before timing out the thread
@@ -115,6 +117,9 @@ class ThreadConnection {
 
     ///Return the time this thread was last active.
     time_t lastActive();
+
+    ///Return the time this thread send a keep-alive message.
+    time_t lastSentTo();
 
     ///Return a reference to the client socket
     ClientSocket& sockRef();

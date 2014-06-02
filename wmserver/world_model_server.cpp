@@ -695,7 +695,7 @@ class ClientConnection : public ThreadConnection {
           }
           //Send a keep alive message if the connection has been idle
           //for half of the time out time.
-          if (time(NULL) - lastActive() > timeout / 2.0) {
+          if (time(NULL) - lastSentTo() > timeout / 2.0) {
             std::unique_lock<std::mutex> tx_lock(tx_mutex);
             send(client::makeKeepAlive());
           }
@@ -708,6 +708,7 @@ class ClientConnection : public ThreadConnection {
     }
 };
 
+//A class to handle connections from solvers to the world model
 class SolverConnection : public ThreadConnection {
   private:
     Debug debug;
@@ -950,7 +951,7 @@ class SolverConnection : public ThreadConnection {
           }
           //Send a keep alive message if the connection has been idle
           //for half of the time out time.
-          if (time(NULL) - lastActive() > timeout / 2.0) {
+          if (time(NULL) - lastSentTo() > timeout / 2.0) {
             send(solver::makeKeepAlive());
           }
         }
