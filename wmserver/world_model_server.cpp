@@ -152,6 +152,7 @@ class ClientConnection : public ThreadConnection {
      * the requests can be removed when this connection closes.
      * A map from attributes to URIs
      */
+		//TODO FIXME The requested_on_demands map is often used without locking
     std::map<u16string, std::set<u16string>> requested_on_demands;
     //Remember the state of streaming requests
     vector<RequestState> streaming_requests;
@@ -599,6 +600,7 @@ class ClientConnection : public ThreadConnection {
                 if (I->ticket_number == ticket) {
                   auto sr = std::find_if(streaming_requests.begin(), streaming_requests.end(),
                       [&](RequestState& rs) {return rs.ticket_number == ticket;});
+									//If a request corresponding to this ticket is in the system remove it.
                   if (sr != streaming_requests.end()) {
                     //Need to cancel on demand count from this request
                     //The request state requested a URI matching sr->search_uri
