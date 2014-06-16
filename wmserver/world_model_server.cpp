@@ -74,6 +74,7 @@
 #include <owl/world_model_protocol.hpp>
 using namespace world_model;
 
+#include "request_state.hpp"
 #include "thread_connection.hpp"
 #include <owl/message_receiver.hpp>
 
@@ -134,48 +135,6 @@ std::mutex on_demand_lock;
  */
 class ClientConnection : public ThreadConnection {
   private:
-    //A structure used to track the state of streaming requests
-    class RequestState {
-      private:
-        RequestState& operator=(const RequestState&) = delete;
-        RequestState(const RequestState&) = delete;
-      public:
-      grail_time last_serviced;
-      grail_time interval;
-      URI search_uri;
-      std::vector<u16string> desired_attributes;
-      WorldModel::world_state last_state;
-      uint32_t ticket_number;
-      //Standing query for streaming requests
-      StandingQuery sq;
-      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, StandingQuery sq) : sq(sq) {
-				std::cerr<<"Constructing request state\n";
-        this->interval = interval;
-        search_uri = uri;
-        desired_attributes = attributes;
-        ticket_number = ticket;
-        last_serviced = 0;
-				std::cerr<<"Done constructing request state\n";
-      }
-      RequestState(RequestState&& other) : sq(other.sq) {
-        last_serviced = other.last_serviced;
-        interval = other.interval;
-        search_uri = other.search_uri;
-        desired_attributes = other.desired_attributes;
-        last_state = other.last_state;
-        ticket_number = other.ticket_number;
-      }
-      RequestState& operator=(RequestState&& other) {
-        sq = other.sq;
-        last_serviced = other.last_serviced;
-        interval = other.interval;
-        search_uri = other.search_uri;
-        desired_attributes = other.desired_attributes;
-        last_state = other.last_state;
-        ticket_number = other.ticket_number;
-        return *this;
-      }
-    };
 
     Debug debug;
     bool interrupted;

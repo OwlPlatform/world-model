@@ -1,6 +1,7 @@
 SET(SourceFiles
   thread_connection.cpp
   world_model_server.cpp
+	request_state.cpp
 )
 
 add_executable (sqlite3_world_model_server ${SourceFiles})
