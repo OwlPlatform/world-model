@@ -262,11 +262,10 @@ class ClientConnection : public ThreadConnection {
       std::cerr<<"Client connection closing.\n";
       interrupted = true;
       //Turn off streaming requests for on demand types
-			std::unique_lock<std::mutex> lck(on_demand_lock);
+      //Lock the on demand request mutex before removing any requests
+      std::unique_lock<std::mutex> lck(on_demand_lock);
       for (auto rt = requested_on_demands.begin(); rt != requested_on_demands.end(); ++rt) {
         for (auto uri = rt->second.begin(); uri != rt->second.end(); ++uri) {
-          //Lock the on demand request mutex and remove these requests
-          std::unique_lock<std::mutex> lck(on_demand_lock);
           if (od_req_counts.end() != od_req_counts.find(rt->first)) {
             std::multiset<u16string>& trc = od_req_counts[rt->first];
             auto req_iterator = trc.find(*uri);
@@ -606,7 +605,8 @@ class ClientConnection : public ThreadConnection {
                     //Need to cancel on demand count from this request
                     //The request state requested a URI matching sr->search_uri
                     //and attributes matching sr->desired_attributes
-										std::unique_lock<std::mutex> lck(on_demand_lock);
+                    //Lock the on_demand_lock a single time before looping through the on demand map and counts
+                    std::unique_lock<std::mutex> lck(on_demand_lock);
                     for (auto attr = sr->desired_attributes.begin(); attr != sr->desired_attributes.end(); ++attr) {
                       //If this was requested cancel the request from
                       //the od_req_counts map.
@@ -616,7 +616,6 @@ class ClientConnection : public ThreadConnection {
 
                         //Verify this attribute was indeed requested in the od_req_counts map
                         {
-                          std::unique_lock<std::mutex> lck(on_demand_lock);
                           auto req_iter = od_req_counts.find(*attr);
                           if ( od_req_counts.end() != req_iter) {
                             //And remove it
