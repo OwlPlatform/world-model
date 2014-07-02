@@ -262,6 +262,7 @@ class ClientConnection : public ThreadConnection {
       std::cerr<<"Client connection closing.\n";
       interrupted = true;
       //Turn off streaming requests for on demand types
+			std::unique_lock<std::mutex> lck(on_demand_lock);
       for (auto rt = requested_on_demands.begin(); rt != requested_on_demands.end(); ++rt) {
         for (auto uri = rt->second.begin(); uri != rt->second.end(); ++uri) {
           //Lock the on demand request mutex and remove these requests
@@ -605,6 +606,7 @@ class ClientConnection : public ThreadConnection {
                     //Need to cancel on demand count from this request
                     //The request state requested a URI matching sr->search_uri
                     //and attributes matching sr->desired_attributes
+										std::unique_lock<std::mutex> lck(on_demand_lock);
                     for (auto attr = sr->desired_attributes.begin(); attr != sr->desired_attributes.end(); ++attr) {
                       //If this was requested cancel the request from
                       //the od_req_counts map.
