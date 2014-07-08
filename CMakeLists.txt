@@ -10,10 +10,16 @@ set (LibOwlWM_VERSION_REVISION 0)
 #SET (CMAKE_C_COMPILER "/usr/bin/clang")
 #SET (CMAKE_CXX_COMPILER "/usr/bin/clang++")
 
+execute_process(COMMAND git diff-tree -s --pretty="%aD, hash %h" HEAD
+	OUTPUT_VARIABLE REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+add_definitions(-DGIT_REPO_VERSION=${REPO_VERSION})
+
 #Use optimization level three for the world model libraries
 set(CMAKE_CXX_FLAGS "-O3 -std=c++0x -Wall -Wextra -Wno-sign-compare")
+#set(CMAKE_CXX_FLAGS "-O3 -std=c++0x -Wall -Wextra -Wno-sign-compare -DGIT_REPO_VERSION=\"${REPO_VERSION}\"")
 #Use this to switch to building debugging code
-#set(CMAKE_CXX_FLAGS "--debug -g -std=c++0x -Wall -Wextra -Wno-sign-compare")
+#set(CMAKE_CXX_FLAGS "--debug -g -DGIT_REPO_VERSION=\"`git diff-tree -s --pretty="Commit: %h, Date: %aD" HEAD`\" -std=c++0x -Wall -Wextra -Wno-sign-compare")
 
 FIND_PATH(OWL_INC_DIR NAMES owl PATHS /usr/include /usr/local/include)
 IF(NOT OWL_INC_DIR)

@@ -78,6 +78,8 @@ using namespace world_model;
 #include "thread_connection.hpp"
 #include <owl/message_receiver.hpp>
 
+#include "repository_version.h"
+
 using std::map;
 using std::pair;
 using std::string;
@@ -977,6 +979,10 @@ int main(int ac, char** av) {
       "or provide no arguments and the default ports (7009 7010) will be used.\n";
     return 0;
   }
+
+	std::cout<<"Starting sqlite3 world model\n";
+	std::cout<<GIT_REPO_VERSION<<'\n';
+
   int solver_port = ac == 3 ? atoi(av[1]) : 7009;
   int client_port = ac == 3 ? atoi(av[2]) : 7010;
   std::cout<<"Listening for solver on port number "<<solver_port<<'\n';
@@ -984,6 +990,10 @@ int main(int ac, char** av) {
 
   SQLite3WorldModel wm("world_model.db");
 #else
+
+	std::cout<<"Starting mysql world model\n";
+	std::cout<<GIT_REPO_VERSION<<'\n';
+
   //mysql world model parameters
   //All parameters will be read in from a configuration file
   std::string username;
