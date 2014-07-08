@@ -5,6 +5,7 @@
 
 # Compiled Dynamic libraries
 *.so
+*.so*
 
 # Compiled Static libraries
 *.lai
@@ -13,6 +14,7 @@
 
 #vim Swap files
 *.swp
+*~
 
 #Files that cmake generates
 CMakeCache.txt
@@ -22,3 +24,8 @@ Misc/*.conf
 cmake_install.cmake
 install_manifest.txt
 
+#sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.kdev4
