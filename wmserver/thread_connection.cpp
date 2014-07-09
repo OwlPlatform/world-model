@@ -40,7 +40,7 @@ void ThreadConnection::cleanFinished() {
   while (I != connections.end()) {
     //First time out the connection if it is stale.
     ThreadConnection* tc = *I;
-    if (time(NULL) - tc->last_activity > tc->timeout) {
+    if (time(NULL) - std::max(tc->last_activity, tc->last_sent) > tc->timeout) {
       std::cerr<<"Timing out connection to "<<tc->sock.ip_address()<<'\n';
       //Interrupt the thread and remove this instance from the list
       tc->interrupt();
