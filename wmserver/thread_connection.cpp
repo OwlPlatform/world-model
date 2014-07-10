@@ -83,8 +83,9 @@ void ThreadConnection::innerRun() {
   finished = true;
 }
 
-///Default to 30 seconds for the timeout
+///Timeout defaults to 60 seconds
 ThreadConnection::ThreadConnection(ClientSocket&& ref_sock, time_t timeout) : sock(std::forward<ClientSocket>(ref_sock)), timeout(timeout){
+	//Initialize activity timers to the current time
   last_activity = time(NULL);
   last_sent = time(NULL);
   finished = false;

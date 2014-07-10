@@ -76,7 +76,7 @@ class ThreadConnection {
   public:
     //Maximum duration of socket inactivity before timing out the thread
     //and allowing cleanFinished to clean it away.
-    //Default timeout is 30 seconds.
+    //The idle time to wait before closing a connection.
     time_t timeout;
 
     ///Removes any finished connections from the connections list.
@@ -88,7 +88,11 @@ class ThreadConnection {
     ///Execute a function on each active ThreadConnection.
     static void forEach(std::function<void(ThreadConnection*)> f);
 
-    ThreadConnection(ClientSocket&& ref_sock, time_t timeout = 30);
+		/**
+		 * Create a thread connection using the given socket. Timeout defaults to
+		 * 60 seconds.
+		 */
+    ThreadConnection(ClientSocket&& ref_sock, time_t timeout = 60);
 
     virtual ~ThreadConnection(){};
 
