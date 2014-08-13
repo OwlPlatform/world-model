@@ -57,6 +57,9 @@
 #include <time.h>
 #include <unistd.h>
 
+// For performance measurements
+#include <chrono>
+
 //World model behavior
 #include <world_model.hpp>
 
@@ -100,7 +103,7 @@ void handler(int signal) {
   killed = true;
 }
 
-#define DEBUG
+// #define DEBUG
 
 struct Debug {
 };
@@ -463,6 +466,7 @@ class ClientConnection : public ThreadConnection {
               setActive();
             }
             else if ( client::MessageID::snapshot_request == message_type ) {
+              auto start = std::chrono::high_resolution_clock::now();
               client::Request request;
               uint32_t ticket;
               std::tie(request, ticket) = client::decodeSnapshotRequest(raw_message);
@@ -502,11 +506,14 @@ class ClientConnection : public ThreadConnection {
                   usleep(100);
                 }
               }
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/Snapshot: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
               //Send the request complete message after all objects are sent
               std::unique_lock<std::mutex> tx_lock(tx_mutex);
               send(client::makeRequestComplete(ticket));
             }
             else if ( client::MessageID::range_request == message_type ) {
+              auto start = std::chrono::high_resolution_clock::now();
               debug<<"Received a range request message.\n";
               client::Request request;
               uint32_t ticket;
@@ -525,6 +532,8 @@ class ClientConnection : public ThreadConnection {
                 //Delay a small amount between messages to avoid filling the network buffer.
                 usleep(10);
               }
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/Range: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
               //Send the request complete message after all objects are sent
               std::unique_lock<std::mutex> tx_lock(tx_mutex);
               send(client::makeRequestComplete(ticket));
@@ -744,7 +753,7 @@ class SolverConnection : public ThreadConnection {
 
         while (not interrupted) {
           if (solver_server.messageAvailable(interrupted)) {
-            std::cerr<<"Trying to get available packet\n";
+            debug<<"Trying to get available packet\n";
             std::vector<unsigned char> raw_message = solver_server.getNextMessage(interrupted);
 
             setActive();
@@ -789,6 +798,7 @@ class SolverConnection : public ThreadConnection {
               StandingQuery::addOriginAttributes(origin, new_attributes);
             }
             else if ( solver::MessageID::solver_data == message_type ) {
+              auto start = std::chrono::high_resolution_clock::now();
               debug<<"Received a solver data message.\n";
               //Insert this new data into the world model
               bool create_uris = false;
@@ -816,6 +826,8 @@ class SolverConnection : public ThreadConnection {
               setActive();
               vector<pair<URI, vector<Attribute>>> data_v(new_data.begin(), new_data.end());
               wm.insertData(data_v, create_uris);
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/Insert/" << solutions.size() << ": " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
             }
             else if ( solver::MessageID::create_uri == message_type ) {
               debug<<"Received a create URI message.\n";
@@ -823,19 +835,26 @@ class SolverConnection : public ThreadConnection {
               wm.createURI(std::get<0>(uri_origin), std::get<2>(uri_origin), std::get<1>(uri_origin));
             }
             else if ( solver::MessageID::expire_uri == message_type ) {
+              auto start = std::chrono::high_resolution_clock::now();
               debug<<"Received an expire URI message.\n";
               std::tuple<URI, grail_time, std::u16string> uri_origin = solver::decodeExpireURI(raw_message);
               //TODO FIXME Verify the origin here
               wm.expireURI(std::get<0>(uri_origin), std::get<1>(uri_origin));
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/ExpireI: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
             }
             else if ( solver::MessageID::delete_uri == message_type ) {
               debug<<"Received a delete URI message.\n";
+              auto start = std::chrono::high_resolution_clock::now();
               std::pair<URI, std::u16string> uri_origin = solver::decodeDeleteURI(raw_message);
               //TODO FIXME Verify the origin here
               debug<<"Deleting URI "<<std::string(uri_origin.first.begin(), uri_origin.first.end())<<'\n';
               wm.deleteURI(uri_origin.first);
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/DeleteId: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
             }
             else if ( solver::MessageID::expire_attribute == message_type ) {
+              auto start = std::chrono::high_resolution_clock::now();
               debug<<"Received an expire URI attribute message.\n";
               std::tuple<URI, std::u16string, grail_time, std::u16string> uri_origin = solver::decodeExpireAttribute(raw_message);
 
@@ -844,8 +863,11 @@ class SolverConnection : public ThreadConnection {
               attr.origin = std::get<3>(uri_origin);
               vector<Attribute> entries{attr};
               wm.expireURIAttributes(std::get<0>(uri_origin), entries, std::get<2>(uri_origin));
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/ExpireA: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
             }
             else if ( solver::MessageID::delete_attribute == message_type ) {
+              auto start = std::chrono::high_resolution_clock::now();
               debug<<"Received a delete URI attribute message.\n";
               std::tuple<URI, std::u16string, std::u16string> uri_origin = solver::decodeDeleteAttribute(raw_message);
               Attribute attr;
@@ -853,10 +875,12 @@ class SolverConnection : public ThreadConnection {
               attr.origin = std::get<2>(uri_origin);
               vector<Attribute> entries{attr};
               wm.deleteURIAttributes(std::get<0>(uri_origin), entries);
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/DeleteA: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
             }
           }
           else {
-            //Sleep for a millisecond to wait for a new message.
+            //Sleep for a microsecond to wait for a new message.
             usleep(1);
           }
           //If this solver has any on demand data types check to see if their

@@ -26,6 +26,7 @@
 #include <iostream>
 #include <mutex>
 #include <utility>
+#include <chrono>
 
 
 using std::vector;
@@ -62,6 +63,10 @@ WorldModel::~WorldModel() {
 
 //Search for URIs in the world model using a glob expression
 std::vector<world_model::URI> WorldModel::searchURI(const std::u16string& glob) {
+  // Timing start for function profiling
+  auto start = std::chrono::high_resolution_clock::now();
+
+
   //debug<<"Searching for "<<std::string(glob.begin(), glob.end())<<'\n';
   std::vector<world_model::URI> result;
   //Build a regular expression from the glob and search for matches in the
@@ -91,15 +96,23 @@ std::vector<world_model::URI> WorldModel::searchURI(const std::u16string& glob) 
     }
   }
   regfree(&exp);
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "core/Search: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
+
   return result;
 }
 
 WorldModel::world_state WorldModel::currentSnapshot(const URI& uri,
                                                     vector<u16string>& desired_attributes,
                                                     bool get_data) {
+  auto start = std::chrono::high_resolution_clock::now();
   //Return if nothing was requested
   if (desired_attributes.empty()) {
-    return WorldModel::world_state();
+    world_model::WorldState state = WorldModel::world_state();
+    auto end = std::chrono::high_resolution_clock::now();
+    std::cout << "core/CurrentNA: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
+    return state;
   }
   //Find which URIs match the given search string
   std::vector<world_model::URI> matches = searchURI(uri);
@@ -173,6 +186,8 @@ WorldModel::world_state WorldModel::currentSnapshot(const URI& uri,
     std::for_each(expressions.begin(), expressions.end(), [&](regex_t& exp) { regfree(&exp);});
   }
 
+  auto end = std::chrono::high_resolution_clock::now();
+  std::cout << "core/CurrentA: " << std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
   return result;
 }
 
