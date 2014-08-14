@@ -621,8 +621,7 @@ void SQLite3WorldModel::expireURIAttributes(world_model::URI uri, std::vector<wo
       //Check if there is an entry that matches this one
       auto same_attribute = [&](Attribute& attr) {
         return (attr.name == entry->name) and
-          (attr.origin == entry->origin) and
-          (attr.creation_date == entry->creation_date);};
+          (attr.origin == entry->origin);};
       auto slot = std::find_if(attributes.begin(), attributes.end(), same_attribute);
       //If a matching solution exists then update the database and erase this
       //from the current model.
