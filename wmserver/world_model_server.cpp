@@ -485,6 +485,8 @@ class ClientConnection : public ThreadConnection {
                   request.start<<" to "<<request.stop_period<<".\n";
                 ws = wm.historicSnapshot(request.object_uri, request.attributes, request.start, request.stop_period);
               }
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/Snapshot: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
               vector<AliasedWorldData> aws = worldStateToAliasedData(ws);
               for (auto aw = aws.begin(); aw != aws.end(); ++aw) {
                 debug<<"Returning URI "<<std::string(aw->object_uri.begin(), aw->object_uri.end())<<
@@ -506,8 +508,6 @@ class ClientConnection : public ThreadConnection {
                   usleep(100);
                 }
               }
-              auto end = std::chrono::high_resolution_clock::now();
-              std::cout << "server/Snapshot: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
               //Send the request complete message after all objects are sent
               std::unique_lock<std::mutex> tx_lock(tx_mutex);
               send(client::makeRequestComplete(ticket));
@@ -519,6 +519,8 @@ class ClientConnection : public ThreadConnection {
               uint32_t ticket;
               std::tie(request, ticket) = client::decodeRangeRequest(raw_message);
               WorldModel::world_state ws = wm.historicDataInRange(request.object_uri, request.attributes, request.start, request.stop_period);
+              auto end = std::chrono::high_resolution_clock::now();
+              std::cout << "server/Range: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
               vector<AliasedWorldData> aws = worldStateToAliasedData(ws);
               for (auto aw = aws.begin(); aw != aws.end(); ++aw) {
                 try {
@@ -532,8 +534,6 @@ class ClientConnection : public ThreadConnection {
                 //Delay a small amount between messages to avoid filling the network buffer.
                 usleep(10);
               }
-              auto end = std::chrono::high_resolution_clock::now();
-              std::cout << "server/Range: " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
               //Send the request complete message after all objects are sent
               std::unique_lock<std::mutex> tx_lock(tx_mutex);
               send(client::makeRequestComplete(ticket));
@@ -825,7 +825,7 @@ class SolverConnection : public ThreadConnection {
               //Don't time out while pushing data
               setActive();
               vector<pair<URI, vector<Attribute>>> data_v(new_data.begin(), new_data.end());
-              wm.insertData(data_v, create_uris);
+              wm.insertData(data_v, this, create_uris);
               auto end = std::chrono::high_resolution_clock::now();
               std::cout << "server/Insert/" << solutions.size() << ": " <<  std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count() << "\n";
             }

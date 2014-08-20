@@ -11,3 +11,4 @@ SET(MysqlSourceFiles
 add_library (sqlite3wm STATIC ${Sqlite3SourceFiles})
 add_library (mysqlwm STATIC ${MysqlSourceFiles})
 
+TARGET_LINK_LIBRARIES(mysqlwm wmserver)

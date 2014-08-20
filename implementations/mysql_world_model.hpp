@@ -24,6 +24,7 @@
 #include <standing_query.hpp>
 
 #include <owl/world_model_protocol.hpp>
+#include "../wmserver/thread_connection.hpp"
 
 ///Implements abstract WorldModel class
 class MysqlWorldModel : public WorldModel {
@@ -41,7 +42,7 @@ class MysqlWorldModel : public WorldModel {
 
     //Store attributes in the database.
     WorldModel::world_state databaseStore(world_model::URI& uri,
-        std::vector<world_model::Attribute>& entries, MYSQL* handle);
+        std::vector<world_model::Attribute>& entries, MYSQL* handle, ThreadConnection* tc = NULL);
 
     //Issue a select request to the database
     world_state fetchWorldData(MYSQL_STMT* stmt, MYSQL* handle);
@@ -96,7 +97,7 @@ class MysqlWorldModel : public WorldModel {
      * If autocreate is set to true then this function will call createURI
      * automatically to create any URIs that do not alrady exist.
      */
-    bool insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, bool autocreate = false);
+    bool insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, ThreadConnection *tc = NULL, bool autocreate = false);
 
     /*
      * Set an expiration time for a URI or attribute.

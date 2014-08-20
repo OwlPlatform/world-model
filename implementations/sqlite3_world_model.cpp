@@ -18,6 +18,7 @@
 #include <semaphore.hpp>
 #include "sqlite3_world_model.hpp"
 #include "sqlite_regexp_module.hpp"
+#include "../wmserver/thread_connection.hpp"
 
 #include <owl/world_model_protocol.hpp>
 
@@ -356,7 +357,7 @@ bool SQLite3WorldModel::createURI(world_model::URI uri,
 }
 
 //Block access to the world model until this new information is added to it
-bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, bool autocreate) {
+bool SQLite3WorldModel::insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, ThreadConnection* tc, bool autocreate) {
   //Handle the map first, then push data to the database.
 
   //Use these timers to check the memory, db, and standing query delays

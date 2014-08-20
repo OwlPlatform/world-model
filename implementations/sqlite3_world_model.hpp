@@ -23,6 +23,7 @@
 #include <standing_query.hpp>
 
 #include <owl/world_model_protocol.hpp>
+#include "../wmserver/thread_connection.hpp"
 
 ///Implements abstract WorldModel class
 class SQLite3WorldModel : public WorldModel {
@@ -73,7 +74,7 @@ class SQLite3WorldModel : public WorldModel {
      * If autocreate is set to true then this function will call createURI
      * automatically to create any URIs that do not alrady exist.
      */
-    bool insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, bool autocreate = false);
+    bool insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, ThreadConnection *tc, bool autocreate = false);
 
     /*
      * Set an expiration time for a URI or attribute.

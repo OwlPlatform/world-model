@@ -188,7 +188,7 @@ bool insertAndRetrieveAttributes(WorldModel& wm) {
 
 bool insertAndRetrieveAttributesAuto(WorldModel& wm) {
   //Test inserting data and then retrieving it
-  wm.insertData(vector<pair<URI, vector<Attribute>>>{make_pair(uri1, attributes1), make_pair(uri2, attributes1)}, true);
+  wm.insertData(vector<pair<URI, vector<Attribute>>>{make_pair(uri1, attributes1), make_pair(uri2, attributes1)},NULL, true);
 
   //Test retrieving inserted attributes (without data)
   vector<u16string> search_atts{u"att1", u"att2", u"att5", u"att6"};

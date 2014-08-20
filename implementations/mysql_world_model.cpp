@@ -195,7 +195,7 @@ WorldModel::world_state MysqlWorldModel::databaseUpdate(world_model::URI& uri,
   return expired;
 }
 
-WorldModel::world_state MysqlWorldModel::databaseStore(world_model::URI& uri, std::vector<world_model::Attribute>& entries, MYSQL* handle) {
+WorldModel::world_state MysqlWorldModel::databaseStore(world_model::URI& uri, std::vector<world_model::Attribute>& entries, MYSQL* handle, ThreadConnection* tc) {
   WorldModel::world_state stored;
   //Return if we cannot get a connection
   if (nullptr == handle) {
@@ -236,6 +236,9 @@ WorldModel::world_state MysqlWorldModel::databaseStore(world_model::URI& uri, st
   parameters[4].is_unsigned = false;
   //Set the parameter structure (uri, attribute, origin, data, timestamp)
   for (auto entry : entries) {
+    if(NULL != tc){
+      tc->setActive();
+    }
     //Bind this attribute's parameters
     //Name
     std::string char8_name(entry.name.begin(), entry.name.end());
@@ -684,7 +687,7 @@ bool MysqlWorldModel::createURI(world_model::URI uri,
 }
 
 //Block access to the world model until this new information is added to it
-bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, bool autocreate) {
+bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, ThreadConnection *tc, bool autocreate) {
   //Handle the map first, then push data to the database.
 
   //Use these timers to check the memory, db, and standing query delays
@@ -797,7 +800,7 @@ bool MysqlWorldModel::insertData(std::vector<std::pair<world_model::URI, std::ve
   //Store all of the entries that were not transient types in the db
   for (auto I = new_data.begin(); I != new_data.end(); ++I) {
     if (not I->second.empty()) {
-      std::function<WorldModel::world_state(MYSQL*)> bound_fun = [&](MYSQL* handle){ return this->databaseStore(I->first, I->second, handle);};
+      std::function<WorldModel::world_state(MYSQL*)> bound_fun = [&](MYSQL* handle){ return this->databaseStore(I->first, I->second, handle,tc);};
       //Send this task to a query thread
       WorldModel::world_state result = QueryThread<WorldModel::world_state>::assignTask(bound_fun);
     }

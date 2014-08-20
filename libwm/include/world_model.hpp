@@ -41,6 +41,7 @@
 
 #include "semaphore.hpp"
 #include "standing_query.hpp"
+#include "../wmserver/thread_connection.hpp"
 
 ///Representation of storage and search functionality for the world model
 class WorldModel {
@@ -96,7 +97,7 @@ class WorldModel {
      * a reasonable time then it must be deferred to a thread so that this call
      * can return.
      */
-    virtual bool insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, bool autocreate = false) = 0;
+    virtual bool insertData(std::vector<std::pair<world_model::URI, std::vector<world_model::Attribute>>> new_data, ThreadConnection *tc = NULL, bool autocreate = false) = 0;
 
     /*
      * Set an expiration time for a URI or attribute.
