@@ -1,7 +1,7 @@
 -- Table
 CREATE TABLE Uris (
   idUri INTEGER AUTO_INCREMENT PRIMARY KEY,
-  uriName VARCHAR(170) NOT NULL) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci;
+  uriName VARCHAR(170) NOT NULL) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci ENGINE=InnoDB;
 
 -- Index
 CREATE INDEX idx_uri_name ON Uris (uriName);

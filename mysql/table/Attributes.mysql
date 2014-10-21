@@ -1,7 +1,7 @@
 -- Table
 CREATE TABLE Attributes (
   idAttribute INTEGER AUTO_INCREMENT PRIMARY KEY,
-  attributeName VARCHAR(170) NOT NULL) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci;
+  attributeName VARCHAR(170) NOT NULL) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci ENGINE=InnoDB;
 
 -- Index
 CREATE INDEX idx_attribute_name ON Attributes (attributeName);

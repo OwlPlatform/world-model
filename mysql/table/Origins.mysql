@@ -1,7 +1,7 @@
 -- Table definition
 CREATE TABLE Origins (
   idOrigin INTEGER AUTO_INCREMENT PRIMARY KEY,
-  originName VARCHAR(170) NOT NULL) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci;
+  originName VARCHAR(170) NOT NULL) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci ENGINE=InnoDB;
 
 -- Index
 CREATE INDEX idx_origin_name ON Origins (originName);
