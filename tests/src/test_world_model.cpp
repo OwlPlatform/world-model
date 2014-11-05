@@ -964,7 +964,8 @@ int main(int argc, char** argv) {
   }
   
   //Use this for debugging specific tests (move the tests_start label)
-  goto tests_start;
+  //goto tests_start;
+  goto tests_slow;
   
 tests_start:
   
@@ -1446,6 +1447,7 @@ tests_start:
   }
   cerr<<"Pass\n";
 
+tests_slow:
   //Test multiple threads simultaneously inserting and retrieving values.
   cerr<<"Testing simultaneous threaded read/write...\t";
   {
