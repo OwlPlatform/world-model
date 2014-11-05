@@ -34,6 +34,7 @@ BEGIN
     SET searchOrig = IFNULL(origin, '.*');
 
     -- Make the query
+    -- Do not order the result -- leave that up to the caller.
     SELECT 
             u.uriName AS uri, a.attributeName AS attribute, o.originName AS origin, 
             av.data, av.createTimestamp AS created, av.expireTimestamp AS expires 
@@ -47,8 +48,7 @@ BEGIN
             a.attributeName REGEXP searchAttr COLLATE utf16_unicode_ci AND 
             o.originName REGEXP searchOrig COLLATE utf16_unicode_ci AND 
             av.createTimestamp >= beginTs AND
-            av.createTimestamp <= endTs 
-      ORDER BY av.createTimestamp ASC;
+            av.createTimestamp <= endTs;
 END
 //
 DELIMITER ;

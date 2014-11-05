@@ -1322,6 +1322,15 @@ WorldModel::world_state MysqlWorldModel::_historicDataInRange(const world_model:
   //Delete the statement
   mysql_stmt_close(statement_p);
 
+	//Sort the returned attributes
+	//TODO FIXME Is sorting here faster than in mysql?
+	auto sortAttrsByTime = [](const world_model::Attribute& a, const world_model::Attribute& b) {
+		return a.creation_date < b.creation_date;
+	};
+	for (std::pair<const world_model::URI, std::vector<world_model::Attribute>>& I : result) {
+		std::sort(I.second.begin(), I.second.end(), sortAttrsByTime);
+	}
+
   //Return all of the results
   return result;
 }
