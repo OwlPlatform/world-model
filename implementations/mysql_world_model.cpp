@@ -1313,7 +1313,7 @@ WorldModel::world_state fetchIndexedWorldData(MYSQL_STMT* stmt, MYSQL* handle) {
 		std::u16string uri(idToName(twd.identifier_id, "Uris", handle));
 		std::u16string attr(idToName(twd.attribute_id, "Attributes", handle));
 		std::u16string origin(idToName(twd.origin_id, "Origins", handle));
-    ws[uri].push_back(world_model::Attribute{attr, twd.creation, twd.expiration, origin, twd.data});
+    ws[uri].emplace_back(world_model::Attribute{attr, twd.creation, twd.expiration, origin, twd.data});
 	}
 
   return ws;
