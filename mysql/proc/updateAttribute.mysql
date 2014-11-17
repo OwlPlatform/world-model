@@ -17,7 +17,8 @@ BEGIN
   DECLARE nextTimestamp BIGINT;
   
   /*
-    Be sure that our arguments are already defined
+    Be sure that the given identifier, origin, and attribute name exist in
+    the appropriate tables.
   */
   -- URI
   SELECT idUri INTO lcl_idUri FROM Uris WHERE uriName=uri COLLATE utf16_unicode_ci;
