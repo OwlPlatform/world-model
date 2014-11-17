@@ -398,6 +398,8 @@ MysqlWorldModel::MysqlWorldModel(std::string db_name, std::string user, std::str
       std::cerr<<"World model will operate without persistent storage.\n";
     }
     else {
+      //Setting this option in the configuration will make the database faster:
+      //set GLOBAL innodb-flush-log-at-trx-commit=2;
       //Enable multiple statement in a single string sent to mysql
       if (NULL == mysql_real_connect(db_handle,"localhost", user.c_str(), password.c_str(),
             NULL, 0, NULL,CLIENT_MULTI_STATEMENTS)) {
