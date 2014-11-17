@@ -1,10 +1,10 @@
 /*
  Retrieves a range of values based on URI, Attribute name, and Origin, between two timestamps (inclusive),
- where matching is performed by regular expression parsing.  Results are sorted in ascending order
- by creation timestamp creation.
+ where matching is performed by regular expression parsing.
 
  Changes:
  2012/05/21 - Initial version.
+ 2014/11/11 - Sorting removed
 */
 
 DROP PROCEDURE IF EXISTS getRangeValues;
@@ -35,21 +35,58 @@ BEGIN
 
     -- Make the query
     -- Do not order the result -- leave that up to the caller.
-    SELECT 
-            u.uriName AS uri, a.attributeName AS attribute, o.originName AS origin, 
-            av.data, av.createTimestamp AS created, av.expireTimestamp AS expires 
-      FROM 
-            Uris u, Attributes a, Origins o, AttributeValues av 
-      WHERE 
-            av.idUri=u.idUri AND 
-            av.idAttribute=a.idAttribute AND
-            av.idOrigin=o.idOrigin AND 
-            u.uriName REGEXP searchUri COLLATE utf16_unicode_ci AND 
-            a.attributeName REGEXP searchAttr COLLATE utf16_unicode_ci AND 
-            o.originName REGEXP searchOrig COLLATE utf16_unicode_ci AND 
-            av.createTimestamp >= beginTs AND
-            av.createTimestamp <= endTs;
+    -- Temporary table with time filtered data results first
+    -- CREATE TEMPORARY TABLE FILTEREDDATA (
+    --  idUri INTEGER NOT NULL,
+    --  idAttribute INTEGER NOT NULL,
+    --  idOrigin INTEGER NOT NULL,
+    --  data MEDIUMBLOB,
+    --  createTimestamp BIGINT DEFAULT 0,
+    --  expireTimestamp BIGINT DEFAULT 0) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci;
+    -- CREATE INDEX temp_value_lookup ON FILTEREDDATA (idUri, idAttribute, idOrigin);
+    -- INSERT INTO FILTEREDDATA
+    -- SELECT
+    --      av.idUri, av.idAttribute, av.idOrigin, av.data, av.createTimestamp, av.expireTimestamp
+    -- FROM AttributeValues av
+    -- WHERE
+    --       av.createTimestamp >= beginTs AND
+    --       av.createTimestamp <= endTs;
+    --       
+
+
+
+    -- SELECT 
+    --         u.uriName AS uri, a.attributeName AS attribute, o.originName AS origin, 
+    --         av.data, av.createTimestamp AS created, av.expireTimestamp AS expires 
+    --   FROM 
+    --         Uris u, Attributes a, Origins o, AttributeValues av 
+    --   WHERE 
+    --         av.idUri=u.idUri AND 
+    --         av.idAttribute=a.idAttribute AND
+    --         av.idOrigin=o.idOrigin AND 
+    --         u.uriName REGEXP searchUri COLLATE utf16_unicode_ci AND 
+    --         a.attributeName REGEXP searchAttr COLLATE utf16_unicode_ci AND 
+    --         o.originName REGEXP searchOrig COLLATE utf16_unicode_ci AND
+    --        av.createTimestamp >= beginTs AND
+    --        av.createTimestamp <= endTs;
+      
+      -- DROP TABLE FILTEREDDATA;
+
+		SELECT
+           idUri, idAttribute, idOrigin, data, createTimestamp as created, expireTimestamp as expires
+      FROM
+           AttributeValues
+      WHERE
+           createTimestamp >= beginTs AND
+           createTimestamp <= endTs AND
+           idUri IN (SELECT idUri FROM Uris WHERE uriName REGEXP searchUri COLLATE utf16_unicode_ci) AND
+           idOrigin IN (SELECT idOrigin FROM Origins WHERE originName REGEXP searchOrig COLLATE utf16_unicode_ci) AND
+           idAttribute IN (SELECT idAttribute FROM Attributes WHERE attributeName REGEXP searchAttr COLLATE utf16_unicode_ci);
+
+
+
 END
 //
 DELIMITER ;
-
+-- SELECT idUri, idAttribute, idOrigin, data, createTimestamp as created, expireTimestamp as expires FROM AttributeValues WHERE createTimestamp >= beginTs AND createTimestamp <= endTs AND idUri IN (SELECT idUri FROM Uris WHERE uriName REGEXP ".*") AND idOrigin IN (SELECT idOrigin FROM Origins WHERE originName REGEXP ".*") AND idAttribute IN (SELECT idAttribute FROM Attributes WHERE attributeName REGEXP ".*");
+-- SELECT idUri, idAttribute, idOrigin, data, createTimestamp as created, expireTimestamp as expires FROM AttributeValues WHERE createTimestamp >= 14 AND createTimestamp <= 4823 AND idUri IN (SELECT idUri FROM Uris WHERE uriName REGEXP ".*") AND idOrigin IN (SELECT idOrigin FROM Origins WHERE originName REGEXP ".*") AND idAttribute IN (SELECT idAttribute FROM Attributes WHERE attributeName REGEXP ".*");

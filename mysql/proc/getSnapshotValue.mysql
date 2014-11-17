@@ -29,19 +29,25 @@ BEGIN
 
     -- Make the query
     SELECT 
-            u.uriName AS uri, a.attributeName AS attribute, o.originName AS origin, 
-            av.data, av.createTimestamp AS created, av.expireTimestamp AS expires 
+            -- u.uriName AS uri, a.attributeName AS attribute, o.originName AS origin, 
+            -- av.data, av.createTimestamp AS created, av.expireTimestamp AS expires 
+						idUri, idAttribute, idOrigin, data, createTimestamp as created,
+            expireTimestamp as expires
       FROM 
-            Uris u, Attributes a, Origins o, AttributeValues av 
+            -- Uris u, Attributes a, Origins o, AttributeValues av 
+            AttributeValues
       WHERE 
-            av.idUri=u.idUri AND 
-            av.idAttribute=a.idAttribute AND
-            av.idOrigin=o.idOrigin AND 
-            u.uriName REGEXP searchUri COLLATE utf16_unicode_ci AND 
-            a.attributeName REGEXP searchAttr COLLATE utf16_unicode_ci AND 
-            o.originName REGEXP searchOrig COLLATE utf16_unicode_ci AND 
-            av.createTimestamp <= timestamp AND
-            (av.expireTimestamp = 0 OR av.expireTimestamp > timestamp);
+            -- av.idUri=u.idUri AND 
+            -- av.idAttribute=a.idAttribute AND
+            -- av.idOrigin=o.idOrigin AND 
+            -- u.uriName REGEXP searchUri COLLATE utf16_unicode_ci AND 
+            -- a.attributeName REGEXP searchAttr COLLATE utf16_unicode_ci AND 
+            -- o.originName REGEXP searchOrig COLLATE utf16_unicode_ci AND 
+            idUri IN (SELECT idUri FROM Uris WHERE uriName REGEXP searchUri COLLATE utf16_unicode_ci) AND
+            idOrigin IN (SELECT idOrigin FROM Origins WHERE originName REGEXP searchOrig COLLATE utf16_unicode_ci) AND
+            idAttribute IN (SELECT idAttribute FROM Attributes WHERE attributeName REGEXP searchAttr COLLATE utf16_unicode_ci) AND
+            createTimestamp <= timestamp AND
+            (expireTimestamp = 0 OR expireTimestamp > timestamp);
   END IF;
 END
 //
