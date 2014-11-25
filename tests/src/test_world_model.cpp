@@ -839,7 +839,7 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
           //Should find as many as we've inserted in this thread
           if (found.size() != cycle) {
 						std::cerr<<"Thread failed range request: wrong number of attributes returned\n";
-						//std::cout<<"Found "<<found.size()<<" but expected "<<cycle<<'\n';
+						std::cout<<"Found "<<found.size()<<" but expected "<<cycle<<'\n';
 						*success = false;
 					}
 					else if (not all_of(found.begin(), found.end(), [&](Attribute& att) { return att.name == att_name;})) {

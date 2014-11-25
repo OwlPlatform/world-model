@@ -226,6 +226,8 @@ WorldModel::world_state MysqlWorldModel::databaseStore(world_model::URI& uri, st
   unsigned long uri_len = char8_uri.size();
   parameters[0].length = &uri_len;
   parameters[0].is_unsigned = true;
+
+	//These parameters will be set for each new data entry
   parameters[1].buffer_type = MYSQL_TYPE_STRING;
   parameters[1].is_unsigned = true;
   parameters[2].buffer_type = MYSQL_TYPE_STRING;
@@ -269,6 +271,7 @@ WorldModel::world_state MysqlWorldModel::databaseStore(world_model::URI& uri, st
     }
     mysql_stmt_reset(statement_p);
   }
+
   //Delete the statement
   mysql_stmt_close(statement_p);
   //Return which attributes were successfully stored
@@ -284,7 +287,7 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
     directory.push_back('/');
   }
   std::vector<std::string> tables{"AttributeValues.mysql", "Attributes.mysql",
-                             "Origins.mysql", "Uris.mysql"};
+                             "CurrentAttributes.mysql", "Origins.mysql", "Uris.mysql"};
   for (std::string& tname : tables) {
 		//TODO FIXME There should be a compile-time define specifying the root
 		//directory to search for the mysql proc files.
