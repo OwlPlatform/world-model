@@ -7,7 +7,8 @@ In order to use to the msyql world model, you must of course first have mysql or
    sudo mysql_install_db
 2. Start mysql
    bash /etc/rc.d/rc.mysqld start
-   You should also make this script executable with the chmod command to allow mysql to start automatically when your computer restarts.
+   You should also make this script executable with the chmod command to allow mysql to start automatically when your computer restarts. To speed up your mysql database you may wish to drop some ACID compliance by putting this command in your mysql configuration:
+     innodb-flush-log-at-trx-commit = 2
 3. Configure passwords and such to secure your databases.
    sudo mysql_secure_installation
 4. Create a user for the system. An example of the commands to run appears in scripts/setup-mysql.txt
