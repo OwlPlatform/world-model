@@ -1,0 +1,15 @@
+-- Table definition
+-- The idValue should match a value in the AttributeValues table
+CREATE TABLE CurrentAttributes (
+  idValue INTEGER PRIMARY KEY,
+  idUri INTEGER NOT NULL,
+  idAttribute INTEGER NOT NULL,
+  idOrigin INTEGER NOT NULL,
+  -- data MEDIUMBLOB,
+  createTimestamp BIGINT DEFAULT 0,
+  expireTimestamp BIGINT DEFAULT 0,
+  FOREIGN KEY (idValue) REFERENCES AttributeValues(idValue)) ENGINE = INNODB DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci;
+
+-- Indexes
+CREATE INDEX idx_cur_attrib_value_lookup ON CurrentAttributes (idUri, idAttribute, idOrigin);
+

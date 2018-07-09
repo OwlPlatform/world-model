@@ -17,20 +17,15 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
  * or visit http://www.gnu.org/licenses/gpl-2.0.html
  */
-
 /*******************************************************************************
- * REGEXP function implementation for the sqlite3 database.
+ * Uses a preprocessor symbol to define GIT_REPO_VERSION
+ * If this symbol was not defined then the string "unknown" will be used.
+ * Compile like this:
+ *   g++ -DGIT_REPO_VERSION=\"`git diff-tree -s --pretty="Commit: %h, Date: %aD" HEAD`\"
  ******************************************************************************/
 
-#ifndef __SQLITE_REGEXP_MODULE_HPP__
-#define __SQLITE_REGEXP_MODULE_HPP__
+//Default to unknown if the version wasn't defined
+#ifndef GIT_REPO_VERSION
+#define GIT_REPO_VERSION "unknown"
+#endif
 
-#include <sqlite3.h>
-
-/*
- * Returns the result of a call to sqlite3_create_function
- * Adds support for REGEX searches in SQLITE3.
- */
-int initializeRegex(sqlite3 *db);
-
-#endif //Not defined __SQLITE_REGEXP_MODULE_HPP__

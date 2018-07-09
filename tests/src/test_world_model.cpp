@@ -833,17 +833,119 @@ void readWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write
       if (cycle % 3 == 1) {
         WorldModel::world_state ws = wm.historicDataInRange(uri1, search_atts, 0, cycle);
         if (ws.end() == ws.find(uri1)) {
-          std::cerr<<"Thread failed range request\n";
+          std::cerr<<"Thread failed range request: uri not found\n";
           *success = false;
           //return;
         }
         else {
           vector<Attribute> found = ws[uri1];
           //Should find as many as we've inserted in this thread
-          if (found.size() != cycle and
-              not all_of(found.begin(), found.end(), [&](Attribute& att) { return att.name == att_name;})) {
-            std::cerr<<"Thread failed range request\n";
+          if (found.size() != cycle) {
+						std::cerr<<"Thread failed range request: wrong number of attributes returned\n";
+						std::cout<<"Found "<<found.size()<<" but expected "<<cycle<<'\n';
+						*success = false;
+					}
+					else if (not all_of(found.begin(), found.end(), [&](Attribute& att) { return att.name == att_name;})) {
+
+						std::cerr<<"Thread failed range request: non-matching attributes returned\n";
+						*success = false;
+            //return;
+          }
+          //std::cerr<<"Time to data in range: "<<duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() - before<<'\n';
+        }
+      }
+      else {
+        WorldModel::world_state ws = wm.historicSnapshot(uri1, search_atts, 0, cycle);
+        if (ws.end() == ws.find(uri1)) {
+          std::cerr<<"historic snapshot failed to find uri!\n";
+          *success = false;
+          //return;
+        }
+        else {
+          vector<Attribute> found = ws[uri1];
+          //std::cerr<<"Testing: found.size() is "<<found.size()<<'\n';
+          //std::cerr<<"Testing: found[0].name is "<<string(found[0].name.begin(), found[0].name.end())<<'\n';
+          //std::cerr<<"Testing: found[0].data.size() is "<<found[0].data.size()<<'\n';
+          //std::cerr<<"Testing: data size should be "<<attributes[0].data.size()<<'\n';
+          //if (found.size() > 0) {
+          //std::cerr<<"Data bytes are: ";
+          //std::for_each(found[0].data.begin(), found[0].data.end(), [&](uint8_t c) {std::cerr<<(uint32_t)c<<'\t';});
+          //std::cerr<<'\n';
+          //}
+          //if (found.size() > 0) {
+          //std::cerr<<"Data bytes should be: ";
+          //std::for_each(attributes[0].data.begin(), attributes[0].data.end(), [&](uint8_t c) {std::cerr<<(uint32_t)c<<'\t';});
+          //std::cerr<<'\n';
+          //}
+          if (found.size() == 1 and
+              found[0].name == att_name and
+              found[0].data.size() == attributes[0].data.size() and
+              equal(found[0].data.begin(), found[0].data.end(), attributes[0].data.begin())) {
+            ;
+            //std::cerr<<"Time to historic snapshot: "<<duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() - before<<'\n';
+          }
+          else {
+            std::cerr<<"Thread failed historic snapshot\n";
             *success = false;
+            //return;
+          }
+        }
+      }
+    }
+  }
+}
+
+void readAfterWriteThread(WorldModel* wm_p, u16string att_name, size_t num_read_write, bool* success) {
+  WorldModel& wm = *wm_p;
+  vector<u16string> search_atts{att_name};
+  vector<Attribute> attributes{
+    Attribute{att_name, 0, 0, u"test_world_model", {2,3}}};
+
+  for (size_t cycle = 1; cycle <= num_read_write; ++cycle) {
+    //Alternate between taking snapshots and taking historic queries
+    if (cycle % 2 == 1) {
+      WorldModel::world_state ws = wm.currentSnapshot(uri1, search_atts, true);
+      if (ws.end() == ws.find(uri1)) {
+        std::cerr<<"Thread failed current snapshot\n";
+        *success = false;
+        //return;
+      }
+      else {
+        WorldModel::world_state::const_iterator found = ws.find(uri1);
+        if (ws.count(uri1) == 1 and
+            found->second.at(0).name == att_name and
+            found->second.at(0).data.size() == attributes.at(0).data.size() and
+            equal(found->second.at(0).data.begin(), found->second.at(0).data.end(), attributes.at(0).data.begin())) {
+          //std::cerr<<"Time to current snapshot: "<<duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() - before<<'\n';
+          ;
+        }
+        else {
+          std::cerr<<"Thread failed current snapshot\n";
+          *success = false;
+          //return;
+        }
+      }
+    }
+    else {
+      if (cycle % 3 == 1) {
+        WorldModel::world_state ws = wm.historicDataInRange(uri1, search_atts, 0, cycle);
+        if (ws.end() == ws.find(uri1)) {
+          std::cerr<<"Thread failed range request: uri not found\n";
+          *success = false;
+          //return;
+        }
+        else {
+          vector<Attribute> found = ws[uri1];
+          //Should find as many as we've inserted in this thread
+          if (found.size() != cycle) {
+						std::cerr<<"Thread failed range request: wrong number of attributes returned\n";
+						//std::cout<<"Found "<<found.size()<<" but expected "<<cycle<<'\n';
+						*success = false;
+					}
+					else if (not all_of(found.begin(), found.end(), [&](Attribute& att) { return att.name == att_name;})) {
+
+						std::cerr<<"Thread failed range request: non-matching attributes returned\n";
+						*success = false;
             //return;
           }
           //std::cerr<<"Time to data in range: "<<duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() - before<<'\n';
@@ -971,7 +1073,8 @@ int main(int argc, char** argv) {
   }
   
   //Use this for debugging specific tests (move the tests_start label)
-  goto tests_start;
+  //goto tests_start;
+  goto tests_slow;
   
 tests_start:
   
@@ -1429,7 +1532,7 @@ tests_start:
     vector<thread> test_threads;
     for (size_t i = 0; i < 10; ++i) {
       string num = to_string(i);
-      test_threads.push_back(thread(insertingThread, &(*wm), u"att" + u16string(num.begin(), num.end()), 100));
+      test_threads.push_back(thread(insertingThread, &(*wm), u"att" + u16string(num.begin(), num.end()), num_cycles));
     }
     for_each(test_threads.begin(), test_threads.end(), [&](thread& t) { t.join();});
     delete wm;
@@ -1446,13 +1549,14 @@ tests_start:
     insertAndRetrieveData2(*wm);
     for (size_t i = 0; i < 10; ++i) {
       string num = to_string(i);
-      test_threads.push_back(thread(readingThread, &(*wm), u"att" + u16string(num.begin(), num.end()), 100));
+      test_threads.push_back(thread(readingThread, &(*wm), u"att" + u16string(num.begin(), num.end()), num_cycles));
     }
     for_each(test_threads.begin(), test_threads.end(), [&](thread& t) { t.join();});
     delete wm;
   }
   cerr<<"Pass\n";
 
+tests_slow:
   //Test multiple threads simultaneously inserting and retrieving values.
   cerr<<"Testing simultaneous threaded read/write...\t";
   {
@@ -1475,6 +1579,41 @@ tests_start:
     delete wm;
   }
 
+  goto FINISH;
+  //Test multiple threads simultaneously inserting and after that multiple threads simultaneously reading
+  cerr<<"Testing simultaneous threaded write and then multiple threads reading...\t";
+  {
+    WorldModel* wm = makeWM(makeFilename());
+    vector<thread> test_threads;
+    wm->createURI(uri1, u"test_world_model", 0);
+    bool success = true;
+    //First the writing
+    {
+      vector<thread> test_threads;
+      for (size_t i = 0; i < 10; ++i) {
+        string num = to_string(i);
+        test_threads.push_back(thread(insertingThread, &(*wm), u"att" + u16string(num.begin(), num.end()), num_cycles));
+      }
+      for_each(test_threads.begin(), test_threads.end(), [&](thread& t) { t.join();});
+    }
+    //Now the reading
+    for (size_t i = 0; i < 10; ++i) {
+      string num = to_string(i);
+      u16string u_num = u"att" + u16string(num.begin(), num.end());
+      test_threads.push_back(thread(readAfterWriteThread, &(*wm), u_num, num_cycles, &success));
+    }
+    for_each(test_threads.begin(), test_threads.end(), [&](thread& t) { t.join();});
+    if (success) {
+      cerr<<"Pass\n";
+    }
+    else {
+      cerr<<"Fail\n";
+    }
+    delete wm;
+  }
+
+
+FINISH:
   return 0;
 }
 

@@ -1,3 +1,10 @@
+/*
+ Update an Attribute for an identifier in the database. It is created
+ if it does not already exist, and the Attributes, Uris, and Origins
+ tables are updated if the attribute name, uri, or origin do not already
+ exist. This updates both the AttributesValues table and the CurrentAttributes
+ table.
+*/
 DROP PROCEDURE IF EXISTS updateAttribute;
 DELIMITER //
 CREATE PROCEDURE updateAttribute(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci, 
@@ -14,10 +21,12 @@ BEGIN
   DECLARE lcl_idAttribute INTEGER;
   DECLARE lcl_idOrigin INTEGER;
   DECLARE idPrevValue BIGINT;
+  DECLARE prevTimestamp BIGINT;
   DECLARE nextTimestamp BIGINT;
   
   /*
-    Be sure that our arguments are already defined
+    Be sure that the given identifier, origin, and attribute name exist in
+    the appropriate tables.
   */
   -- URI
   SELECT idUri INTO lcl_idUri FROM Uris WHERE uriName=uri COLLATE utf16_unicode_ci;
@@ -40,25 +49,68 @@ BEGIN
     SELECT LAST_INSERT_ID() INTO lcl_idOrigin;
   END IF;
 
-  -- Check for previous value, and set its expiration timestamp
-  CALL getIdValueBefore(uri, attribute, origin, createTimestamp, idPrevValue);
+  -- There are four possible cases when we are doing an insert:
+  -- Case 1:
+  -- If there is no matching entry in the CurrentAttributes table then this
+  -- attribute is new and we insert it into the CurrentAttributes and
+  -- AttributesValues tables.
+  -- Case 2:
+  -- If there is a value matching this identifier, origin, and attribute in the
+  -- CurrentAttributes table and the new attribute is newer (based upon the --
+  -- createTimestamp) then we set the expiration time of the existing attribute in
+  -- the AttributesValues table, and insert the new attribute into the
+  -- AttributesValues table and the CurrentAttributes table.
+  -- Case 3:
+  -- Otherwise we search for the previous value and set its expiration timestamp
+  -- before inserting this new entry into the attributesValues table.
+  -- Case 4:
+  -- The same as case 2 but the create timestamps for the new value and a previous
+  -- value are the same. We do not do an insert since this is not allowed by the
+  -- world model.
+  SELECT idValue, CurrentAttributes.createTimestamp INTO idPrevValue, prevTimestamp FROM CurrentAttributes WHERE
+    lcl_idUri=idUri AND lcl_idAttribute=idAttribute AND lcl_idOrigin=idOrigin;
 
+  IF idPrevValue IS NULL THEN
+    -- Case 1, this is a new attribute/origin/identifier combination
 
-  IF idPrevValue IS NOT NULL THEN
+    -- Insert into the attribute values table and then the current attributes table
+    INSERT INTO AttributeValues (idUri, idAttribute, idOrigin, data, createTimestamp) 
+      VALUES (lcl_idUri, lcl_idAttribute, lcl_idOrigin, data, createTimestamp);
+
+    INSERT INTO CurrentAttributes (idValue, idUri, idAttribute, idOrigin, createTimestamp)
+      VALUES (LAST_INSERT_ID(), lcl_idUri, lcl_idAttribute, lcl_idOrigin, createTimestamp);
+
+  ELSEIF prevTimestamp < createTimestamp THEN
+    -- Case 2, quick update
     UPDATE AttributeValues SET expireTimestamp=createTimestamp WHERE idValue=idPrevValue;
-  END IF;
 
-  -- Check for a value after this one, and set this one's expiration timestamp if it exists.
-  CALL getTimestampAfter(uri, attribute, origin, createTimestamp, nextTimestamp);
+    INSERT INTO AttributeValues (idUri, idAttribute, idOrigin, data, createTimestamp) 
+      VALUES (lcl_idUri, lcl_idAttribute, lcl_idOrigin, data, createTimestamp);
 
-  -- Now insert into the attribute values table
-  INSERT INTO AttributeValues (idUri, idAttribute, idOrigin, data, createTimestamp) 
-    VALUES (lcl_idUri, lcl_idAttribute, lcl_idOrigin, data, createTimestamp);
+    UPDATE CurrentAttributes SET createTimestamp=createTimestamp, idValue=LAST_INSERT_ID() WHERE idValue=idPrevValue;
 
-  -- Update expiration timestamp if necessary
-  IF nextTimestamp IS NOT NULL THEN
-    SELECT LAST_INSERT_ID() INTO idInsert;
-    UPDATE AttributeValues SET expireTimestamp=nextTimestamp WHERE idValue=idInsert;
+  ELSEIF prevTimestamp > createTimestamp THEN
+    -- Case 3, the current table has something newer so slow update
+    CALL getIdValueBefore(uri, attribute, origin, createTimestamp, idPrevValue);
+
+    IF idPrevValue IS NOT NULL THEN
+      UPDATE AttributeValues SET expireTimestamp=createTimestamp WHERE idValue=idPrevValue;
+    END IF;
+
+    -- Check for a value after this one, and set this one's expiration timestamp if it exists.
+    CALL getTimestampAfter(uri, attribute, origin, createTimestamp, nextTimestamp);
+
+    -- Now insert into the attribute values table
+    INSERT INTO AttributeValues (idUri, idAttribute, idOrigin, data, createTimestamp) 
+      VALUES (lcl_idUri, lcl_idAttribute, lcl_idOrigin, data, createTimestamp);
+
+    -- Update expiration timestamp if necessary
+    IF nextTimestamp IS NOT NULL THEN
+      SELECT LAST_INSERT_ID() INTO idInsert;
+      UPDATE AttributeValues SET expireTimestamp=nextTimestamp WHERE idValue=idInsert;
+    END IF;
+  -- ELSE case 4, we insert nothing
+
   END IF;
 
 END

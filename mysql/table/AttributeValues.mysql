@@ -6,7 +6,7 @@ CREATE TABLE AttributeValues (
   idOrigin INTEGER NOT NULL,
   data MEDIUMBLOB,
   createTimestamp BIGINT DEFAULT 0,
-  expireTimestamp BIGINT DEFAULT 0) DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci;
+  expireTimestamp BIGINT DEFAULT 0) ENGINE = INNODB DEFAULT CHARACTER SET utf16 COLLATE utf16_unicode_ci;
 
 -- Indexes
 CREATE INDEX idx_attrib_value_lookup ON AttributeValues (idUri, idAttribute, idOrigin);

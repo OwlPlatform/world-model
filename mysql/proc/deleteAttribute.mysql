@@ -47,6 +47,11 @@ delProc:BEGIN
     WHERE idUri=uriId AND
           idAttribute=attributeId;
 
+  -- Delete from CurrentAttributes table
+  DELETE FROM CurrentAttributes
+    WHERE idUri=uriId AND
+          idAttribute=attributeId;
+
   COMMIT;
 END
 //

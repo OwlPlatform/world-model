@@ -15,6 +15,12 @@ CREATE PROCEDURE expireAttribute(pUri VARCHAR(170) CHARACTER SET UTF16 COLLATE u
                            pTimestamp BIGINT)
 MODIFIES SQL DATA
 BEGIN
+  -- Declare variables
+  DECLARE uriId INT;
+  DECLARE attributeId INT;
+
+  START TRANSACTION;
+
   UPDATE Attributes a, AttributeValues av, Origins o, Uris u SET
     expireTimestamp=pTimestamp WHERE
     u.uriName = pUri AND
@@ -24,6 +30,26 @@ BEGIN
     av.idOrigin = o.idOrigin AND
     av.idAttribute = a.idAttribute AND
     av.expireTimestamp = 0;
+
+  -- Make sure the Uri is found
+  SELECT u.idUri INTO uriId 
+    FROM Uris u
+    WHERE u.uriName = pUri;
+
+  -- Make sure the Attribute is found
+  SELECT a.idAttribute INTO attributeId 
+    FROM Attributes a
+    WHERE a.attributeName = pAttribute;
+
+  IF (uriId IS NOT NULL AND attributeId IS NOT NULL) THEN
+
+		-- Delete from CurrentAttributes table since is not expired
+		DELETE FROM CurrentAttributes
+			WHERE idUri=uriId AND
+						idAttribute=attributeId;
+  END IF;
+
+  COMMIT;
 END
 //
 DELIMITER ;

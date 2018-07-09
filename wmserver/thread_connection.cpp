@@ -40,7 +40,7 @@ void ThreadConnection::cleanFinished() {
   while (I != connections.end()) {
     //First time out the connection if it is stale.
     ThreadConnection* tc = *I;
-    if (time(NULL) - tc->last_activity > tc->timeout) {
+    if (time(NULL) - std::max(tc->last_activity, tc->last_sent) > tc->timeout) {
       std::cerr<<"Timing out connection to "<<tc->sock.ip_address()<<'\n';
       //Interrupt the thread and remove this instance from the list
       tc->interrupt();
@@ -83,9 +83,11 @@ void ThreadConnection::innerRun() {
   finished = true;
 }
 
-///Default to 30 seconds for the timeout
+///Timeout defaults to 60 seconds
 ThreadConnection::ThreadConnection(ClientSocket&& ref_sock, time_t timeout) : sock(std::forward<ClientSocket>(ref_sock)), timeout(timeout){
+	//Initialize activity timers to the current time
   last_activity = time(NULL);
+  last_sent = time(NULL);
   finished = false;
 };
 
@@ -97,6 +99,10 @@ time_t ThreadConnection::lastActive() {
   return last_activity;
 }
 
+time_t ThreadConnection::lastSentTo() {
+  return last_sent;
+}
+
 ssize_t ThreadConnection::receive(std::vector<unsigned char>& buff) {
   ssize_t size = sock.receive(buff);
   last_activity = time(NULL);
@@ -104,7 +110,7 @@ ssize_t ThreadConnection::receive(std::vector<unsigned char>& buff) {
 }
 void ThreadConnection::send(const std::vector<unsigned char>& buff) {
   sock.send(buff);
-  last_activity = time(NULL);
+	last_sent = time(NULL);
 }
 ClientSocket& ThreadConnection::sockRef() {
   return sock;

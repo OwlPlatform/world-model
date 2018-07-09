@@ -10,6 +10,11 @@ set (LibOwlWM_VERSION_REVISION 0)
 #SET (CMAKE_C_COMPILER "/usr/bin/clang")
 #SET (CMAKE_CXX_COMPILER "/usr/bin/clang++")
 
+execute_process(COMMAND git diff-tree -s --pretty="%aD, hash %h" HEAD
+	OUTPUT_VARIABLE REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+add_definitions(-DGIT_REPO_VERSION=${REPO_VERSION})
+
 #Use optimization level three for the world model libraries
 set(CMAKE_CXX_FLAGS "-O3 -std=c++0x -Wall -Wextra -Wno-sign-compare")
 #Use this to switch to building debugging code
@@ -57,6 +62,9 @@ INSTALL( FILES ${CMAKE_CURRENT_BINARY_DIR}/owlwm.pc DESTINATION ${PKGCONFIG_INST
 
 #Note that not all distributions put init script in /etc/init.d (Slackware is in /etc/rc.d)
 INSTALL( FILES ${OwlWM_SOURCE_DIR}/scripts/rc.owl-world-model PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE DESTINATION /etc/init.d )
+
+#Install the configuration script
+INSTALL( FILES ${OwlWM_SOURCE_DIR}/scripts/mysqlwm.conf PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ DESTINATION /etc/owl )
 
 # uninstall target
 configure_file(

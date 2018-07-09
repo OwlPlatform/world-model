@@ -19,18 +19,43 @@
  */
 
 /*******************************************************************************
- * REGEXP function implementation for the sqlite3 database.
+ * Intermediate storage for the regular expressions used in the sqlite3 REGEXP
+ * function.
  ******************************************************************************/
 
-#ifndef __SQLITE_REGEXP_MODULE_HPP__
-#define __SQLITE_REGEXP_MODULE_HPP__
+#ifndef __REGEX_STORE_HPP__
+#define __REGEX_STORE_HPP__
 
-#include <sqlite3.h>
+#include <string>
 
-/*
- * Returns the result of a call to sqlite3_create_function
- * Adds support for REGEX searches in SQLITE3.
- */
-int initializeRegex(sqlite3 *db);
+//TODO In the future C++11 support for regex should be used over these POSIX
+//regex c headers.
+#include <sys/types.h>
+#include <regex.h>
 
-#endif //Not defined __SQLITE_REGEXP_MODULE_HPP__
+class RegexStore {
+	private:
+		//If a regex was previously compiled and is stored in the exp variable
+		bool is_compiled;
+		//A pre-compiled expression
+		regex_t exp;
+		//The pattern that was used to make the expression
+		std::u16string pattern;
+	public:
+		RegexStore();
+		~RegexStore();
+		/*
+		 * Create a new regex pattern if necessary, or keep the old one if the
+		 * pattern has not changed
+		 * Returns true on success, false on failure.
+		 */
+		bool preparePattern(std::u16string& patt);
+		/*
+		 * Returns true if in_string matches the current regex pattern.
+		 * Always returns false if is_compiled is false.
+		 */
+		bool patternMatch(std::u16string& in_string);
+};
+
+#endif
+

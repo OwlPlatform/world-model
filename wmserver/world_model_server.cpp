@@ -66,13 +66,19 @@
 #include <sqlite3_world_model.hpp>
 #else
 #include <mysql_world_model.hpp>
+//For config file reading:
+#include <fstream>
+#include <limits>
 #endif
 
 #include <owl/world_model_protocol.hpp>
 using namespace world_model;
 
+#include "request_state.hpp"
 #include "thread_connection.hpp"
 #include <owl/message_receiver.hpp>
+
+#include "repository_version.h"
 
 using std::map;
 using std::pair;
@@ -131,48 +137,6 @@ std::mutex on_demand_lock;
  */
 class ClientConnection : public ThreadConnection {
   private:
-    //A structure used to track the state of streaming requests
-    class RequestState {
-      private:
-        RequestState& operator=(const RequestState&) = delete;
-        RequestState(const RequestState&) = delete;
-      public:
-      grail_time last_serviced;
-      grail_time interval;
-      URI search_uri;
-      std::vector<u16string> desired_attributes;
-      WorldModel::world_state last_state;
-      uint32_t ticket_number;
-      //Standing query for streaming requests
-      StandingQuery sq;
-      RequestState(grail_time interval, URI& uri, std::vector<u16string>& attributes, uint32_t ticket, StandingQuery sq) : sq(sq) {
-				std::cerr<<"Constructing request state\n";
-        this->interval = interval;
-        search_uri = uri;
-        desired_attributes = attributes;
-        ticket_number = ticket;
-        last_serviced = 0;
-				std::cerr<<"Done constructing request state\n";
-      }
-      RequestState(RequestState&& other) : sq(other.sq) {
-        last_serviced = other.last_serviced;
-        interval = other.interval;
-        search_uri = other.search_uri;
-        desired_attributes = other.desired_attributes;
-        last_state = other.last_state;
-        ticket_number = other.ticket_number;
-      }
-      RequestState& operator=(RequestState&& other) {
-        sq = other.sq;
-        last_serviced = other.last_serviced;
-        interval = other.interval;
-        search_uri = other.search_uri;
-        desired_attributes = other.desired_attributes;
-        last_state = other.last_state;
-        ticket_number = other.ticket_number;
-        return *this;
-      }
-    };
 
     Debug debug;
     bool interrupted;
@@ -692,7 +656,7 @@ class ClientConnection : public ThreadConnection {
           }
           //Send a keep alive message if the connection has been idle
           //for half of the time out time.
-          if (time(NULL) - lastActive() > timeout / 2.0) {
+          if (time(NULL) - lastSentTo() > timeout / 2.0) {
             std::unique_lock<std::mutex> tx_lock(tx_mutex);
             send(client::makeKeepAlive());
           }
@@ -705,6 +669,7 @@ class ClientConnection : public ThreadConnection {
     }
 };
 
+//A class to handle connections from solvers to the world model
 class SolverConnection : public ThreadConnection {
   private:
     Debug debug;
@@ -947,7 +912,7 @@ class SolverConnection : public ThreadConnection {
           }
           //Send a keep alive message if the connection has been idle
           //for half of the time out time.
-          if (time(NULL) - lastActive() > timeout / 2.0) {
+          if (time(NULL) - lastSentTo() > timeout / 2.0) {
             send(solver::makeKeepAlive());
           }
         }
@@ -1014,6 +979,10 @@ int main(int ac, char** av) {
       "or provide no arguments and the default ports (7009 7010) will be used.\n";
     return 0;
   }
+
+	std::cout<<"Starting sqlite3 world model\n";
+	std::cout<<GIT_REPO_VERSION<<'\n';
+
   int solver_port = ac == 3 ? atoi(av[1]) : 7009;
   int client_port = ac == 3 ? atoi(av[2]) : 7010;
   std::cout<<"Listening for solver on port number "<<solver_port<<'\n';
@@ -1021,44 +990,98 @@ int main(int ac, char** av) {
 
   SQLite3WorldModel wm("world_model.db");
 #else
-  //mysql world model
-  //Set default values
+
+	std::cout<<"Starting mysql world model\n";
+	std::cout<<GIT_REPO_VERSION<<'\n';
+
+  //mysql world model parameters
+  //All parameters will be read in from a configuration file
   std::string username;
   std::string password;
+	std::string db_name;
+	//Remember which options were set. If the username, password, or database are
+	//not set then refuse to work.
+	unsigned char options_set = 0;
+	//Default to 7009 and 7010 if not specified
   int solver_port = 7009;
   int client_port = 7010;
 
-  if (ac >= 3) {
-    for (size_t cur_arg = 1; cur_arg+1 < ac; ++cur_arg) {
-      //Set username
-      if (string(av[cur_arg]) == "-u") {
-        username = string(av[cur_arg+1]);
-        ++cur_arg;
-      }
-      //Set password
-      else if (string(av[cur_arg]) == "-p") {
-        password = string(av[cur_arg+1]);
-        ++cur_arg;
-      }
-      //Try to interpret these as port numbers
-      else if (cur_arg + 2 == ac) {
-        solver_port = atoi(av[cur_arg]);
-        client_port = atoi(av[cur_arg+1]);
-      }
-      else {
-        std::cout<<"Usage is: "<<av[0]<<" [-u username] [-p password] [solver_port client_port]\n";
-        std::cout<<"The world model defaults to ports 7009 and 7010 if none are specified.\n";
-        std::cout<<"Port specifications must come last and either none or both must be provided.\n";
-        std::cout<<"You may also specify a username and password with the -u and -p arguments.\n";
-        return 0;
-      }
-    }
-  }
+	if (ac == 2) {
+		std::string config_location(av[1]);
+		std::cout<<"Reading configuration settings from "<<config_location<<'\n';
+		std::ifstream in(config_location);
+		unsigned int line_number = 0;
+		//Keep going while there is more config information to read
+		while (in) {
+			++line_number;
+			//Discard line on comment
+			if ('#' == in.peek()) {
+				in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+			}
+			//Otherwise the line isn't a comment
+			//The string before the '=' character is the key, the rest of the
+			//line is the value
+			else {
+				//Read the line into a string, split the string at the '=',
+				//verify that the key is valid and store its value
+				//Lines longer than 1000 characters are not valid
+				std::array<char, 1000> buffer;
+				std::fill(buffer.begin(), buffer.end(), 0);
+				in.getline(&buffer[0], 1000);
+				//Ignore empty lines
+				if ('\0' != buffer.at(0)) {
+					//Find the location of the '=' character
+					std::array<char, 1000>::iterator eq_index = std::find(buffer.begin(), buffer.end(), '=');
+					//Don't try to process a line without the '=' character
+					if (eq_index == buffer.end()) {
+						std::string invalid(buffer.begin(), buffer.end());
+						std::cerr<<"Invalid line in config file at line number "<<line_number<<'\n';
+					}
+					else {
+						std::string key(buffer.begin(), eq_index);
+						std::string value(eq_index+1, buffer.end());
+						if ("username" == key) {
+							username = value;
+							options_set |= 0x01;
+						}
+						else if ("password" == key) {
+							password = value;
+							options_set |= 0x02;
+						}
+						else if ("dbname" == key) {
+							db_name = value;
+							options_set |= 0x04;
+						}
+						else if ("solver_port" == key) {
+							solver_port = std::stoi(value);
+						}
+						else if ("client_port" == key) {
+							client_port = std::stoi(value);
+						}
+					}
+				}
+			}
+		}
+		//Done reading the configuration file
+		in.close();
+		if (0x7 != (0x7 & options_set)) {
+			std::cout<<"Your configuration file must specify a username, password, "<<
+				"and database name to use with mysql.\n";
+			return 0;
+		}
+	}
+	else {
+		std::cout<<"Usage is: "<<av[0]<<" <configuration file>\n";
+		std::cout<<"The world model defaults to ports 7009 and 7010 if none are specified.\n";
+		return 0;
+	}
+
   std::cout<<"Listening for solver on port number "<<solver_port<<'\n';
   std::cout<<"Listening for client on port number "<<client_port<<'\n';
 
+	std::cout<<"Using db "<<db_name<<'\n';
 
-  MysqlWorldModel wm("world_model_db", username, password);
+  MysqlWorldModel wm(db_name, username, password);
 #endif
 
   //Set up a signal handler to catch interrupt signals so we can close gracefully
