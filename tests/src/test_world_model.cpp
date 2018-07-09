@@ -1072,12 +1072,6 @@ int main(int argc, char** argv) {
     }
   }
   
-  //Use this for debugging specific tests (move the tests_start label)
-  //goto tests_start;
-  goto tests_slow;
-  
-tests_start:
-  
   //Use the random number generator to make filenames for databases
   srandom(time(NULL));
   cerr<<"Testing URI search...\t";
@@ -1556,7 +1550,6 @@ tests_start:
   }
   cerr<<"Pass\n";
 
-tests_slow:
   //Test multiple threads simultaneously inserting and retrieving values.
   cerr<<"Testing simultaneous threaded read/write...\t";
   {
@@ -1579,7 +1572,6 @@ tests_slow:
     delete wm;
   }
 
-  goto FINISH;
   //Test multiple threads simultaneously inserting and after that multiple threads simultaneously reading
   cerr<<"Testing simultaneous threaded write and then multiple threads reading...\t";
   {
@@ -1612,8 +1604,6 @@ tests_slow:
     delete wm;
   }
 
-
-FINISH:
   return 0;
 }
 

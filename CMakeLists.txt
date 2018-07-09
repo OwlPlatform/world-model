@@ -10,10 +10,12 @@ set (LibOwlWM_VERSION_REVISION 0)
 #SET (CMAKE_C_COMPILER "/usr/bin/clang")
 #SET (CMAKE_CXX_COMPILER "/usr/bin/clang++")
 
-execute_process(COMMAND git diff-tree -s --pretty="%aD, hash %h" HEAD
-	OUTPUT_VARIABLE REPO_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND git rev-parse HEAD
+	OUTPUT_VARIABLE REPO_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
 
-add_definitions(-DGIT_REPO_VERSION=${REPO_VERSION})
+add_definitions(-DGIT_REPO_VERSION="${REPO_VERSION}")
 
 #Use optimization level three for the world model libraries
 set(CMAKE_CXX_FLAGS "-O3 -std=c++0x -Wall -Wextra -Wno-sign-compare")
