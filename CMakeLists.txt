@@ -26,7 +26,8 @@ ENDIF(NOT OWL_INC_DIR)
 include_directories ("${OWL_INC_DIR}")
 
 include_directories ("${OwlWM_SOURCE_DIR}/libwm/include")
-include_directories ("${OwlWM_SOURCE_DIR}/implementations")
+include_directories ("${OwlWM_SOURCE_DIR}/implementations/sqlite3/include")
+include_directories ("${OwlWM_SOURCE_DIR}/implementations/mysql")
 
 add_subdirectory (libwm)
 add_subdirectory (implementations)

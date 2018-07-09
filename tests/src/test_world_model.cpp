@@ -24,8 +24,11 @@
 
 #include <world_model.hpp>
 #include <sqlite3_world_model.hpp>
+
+#ifdef USE_MYSQL
 #include <mysql_world_model.hpp>
 #include <task_pool.hpp>
+#endif
 
 #include <owl/world_model_protocol.hpp>
 
@@ -904,10 +907,12 @@ int main(int argc, char** argv) {
   std::function<WorldModel* (std::string)> make_sqlite_wm = [](std::string dbname) {
     return new SQLite3WorldModel(dbname);
   };
+#ifdef USE_MYSQL
   std::function<WorldModel* (std::string)> make_mysql_wm = [&](std::string dbname) {
     //Use the existing username and password variables by reference
     return new MysqlWorldModel(dbname, username, password);
   };
+#endif
 
   //Set the selected world model factory (default to sqlite3)
   makeWM = make_sqlite_wm;
@@ -931,9 +936,11 @@ int main(int argc, char** argv) {
         if ("sqlite" == wmtype) {
           makeWM = make_sqlite_wm;
         }
+#ifdef USE_MYSQL
         else if ("mysql" == wmtype) {
           makeWM = make_mysql_wm;
         }
+#endif
         else {
           std::cerr<<"Unrecognized -wm argument: "<<argv[cur_arg+1]<<'\n';
           std::cerr<<"Expected 'sqlite' or 'mysql'\n";
