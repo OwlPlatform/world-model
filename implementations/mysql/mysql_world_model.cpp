@@ -227,7 +227,7 @@ WorldModel::world_state MysqlWorldModel::databaseStore(world_model::URI& uri, st
   parameters[0].length = &uri_len;
   parameters[0].is_unsigned = true;
 
-	//These parameters will be set for each new data entry
+  //These parameters will be set for each new data entry
   parameters[1].buffer_type = MYSQL_TYPE_STRING;
   parameters[1].is_unsigned = true;
   parameters[2].buffer_type = MYSQL_TYPE_STRING;
@@ -289,8 +289,8 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
   std::vector<std::string> tables{"AttributeValues.mysql", "Attributes.mysql",
                              "CurrentAttributes.mysql", "Origins.mysql", "Uris.mysql"};
   for (std::string& tname : tables) {
-		//TODO FIXME There should be a compile-time define specifying the root
-		//directory to search for the mysql proc files.
+    //TODO FIXME There should be a compile-time define specifying the root
+    //directory to search for the mysql proc files.
     std::string fname = directory + "table/" + tname;
     std::ifstream file(fname.c_str());
     std::string cmd;
@@ -330,7 +330,7 @@ void MysqlWorldModel::setupMySQL(std::string directory, MYSQL* db_handle) {
   std::vector<std::string> procs{"deleteAttribute.mysql", "deleteUri.mysql", "expireAttribute.mysql",
     "expireUri.mysql", "getCurrentValue.mysql", "getCurrentValueId.mysql",
     "getIdValueBefore.mysql", "getRangeValues.mysql", "getSnapshotValue.mysql", "getTimestampAfter.mysql",
-		"getURIAttributeOrigin.mysql",
+    "getURIAttributeOrigin.mysql",
     "searchAttribute.mysql", "searchOrigin.mysql", "searchUri.mysql", "updateAttribute.mysql"};
   for (std::string& pname : procs) {
     if (nullptr == db_handle) { return; }
@@ -447,38 +447,38 @@ MysqlWorldModel::MysqlWorldModel(std::string db_name, std::string user, std::str
               db_handle = nullptr;
             }
 
-						/* FIXME These seem to fail or don't affect performance
-						//Set up a few table optimizations
-						//Turn on batched key access and hash join, which should speed up
-						//queries that cover large percentages of tables
-						std::vector<std::string> optimizations = {
-							"set optimizer_switch='mrr=on';",
-							"set optimizer_switch='mrr_cost_based=off';",
-							"set join_cache_level = 8;",
-							"set join_buffer_space_limit = 300M;", //Space for batched key access
-							"set join_buffer_size = 100M;",        //Individual table size
-							"set optimizer_switch='index_merge_sort_intersection=on;'"};
-						//Try to do all of those optimizations
-						for (std::string& str : optimizations) {
-							if (nullptr != db_handle) {
-								mysql_query(db_handle, str.c_str());
-								if (mysql_query(db_handle, str.c_str())) {
-									std::cerr<<"Error setting "<<str<<".\n";
-									mysql_close(db_handle);
-									db_handle = nullptr;
-								}
-							}
-						}
-						*/
+            /* FIXME These seem to fail or don't affect performance
+            //Set up a few table optimizations
+            //Turn on batched key access and hash join, which should speed up
+            //queries that cover large percentages of tables
+            std::vector<std::string> optimizations = {
+              "set optimizer_switch='mrr=on';",
+              "set optimizer_switch='mrr_cost_based=off';",
+              "set join_cache_level = 8;",
+              "set join_buffer_space_limit = 300M;", //Space for batched key access
+              "set join_buffer_size = 100M;",        //Individual table size
+              "set optimizer_switch='index_merge_sort_intersection=on;'"};
+            //Try to do all of those optimizations
+            for (std::string& str : optimizations) {
+              if (nullptr != db_handle) {
+                mysql_query(db_handle, str.c_str());
+                if (mysql_query(db_handle, str.c_str())) {
+                  std::cerr<<"Error setting "<<str<<".\n";
+                  mysql_close(db_handle);
+                  db_handle = nullptr;
+                }
+              }
+            }
+            */
 
 
-						if (nullptr != db_handle) {
-							//And populate it with tables and stored procedures
-							//Execute stored SQL procedures and create tables
-							std::string path = "./";
-							//std::cerr<<"Setting up mysql from files\n";
-							setupMySQL(path, db_handle);
-						}
+            if (nullptr != db_handle) {
+              //And populate it with tables and stored procedures
+              //Execute stored SQL procedures and create tables
+              std::string path = "./";
+              //std::cerr<<"Setting up mysql from files\n";
+              setupMySQL(path, db_handle);
+            }
           }
         }
       }
@@ -878,7 +878,7 @@ void MysqlWorldModel::expireURI(world_model::URI uri, world_model::grail_time ex
     if (cur_state.find(uri) == cur_state.end()) {
       return;
     }
-		//Remove this identifier from the current state
+    //Remove this identifier from the current state
     cur_state.erase(uri);
   }
   std::vector<world_model::Attribute> to_expire(1);
@@ -950,7 +950,7 @@ void MysqlWorldModel::deleteURI(world_model::URI uri) {
       return;
     }
 
-		//Remove this identifier from the current state
+    //Remove this identifier from the current state
     cur_state.erase(uri);
   }
   //Remove this URI from the database
@@ -1068,123 +1068,125 @@ void bindSQL(MYSQL_BIND* bind, unsigned long* lengths, my_bool* errors, my_bool*
 
 //Get the identifier for the given URI ID from the specified table
 std::u16string idToName(int64_t id, const std::string& table, MYSQL* db_handle) {
-	static std::map<std::pair<uint64_t, std::string>, std::u16string> idToIdentifier;
-	std::pair<uint64_t, std::string> id_table{id, table};
+  static std::map<std::pair<uint64_t, std::string>, std::u16string> idToIdentifier;
+  std::pair<uint64_t, std::string> id_table{id, table};
 
-	//Used a cached result if it exists
-	if (idToIdentifier.end() != idToIdentifier.find(id_table)) {
-		return idToIdentifier[id_table];
-	}
+  //Used a cached result if it exists
+  if (idToIdentifier.end() != idToIdentifier.find(id_table)) {
+    return idToIdentifier[id_table];
+  }
 
-	if (nullptr == db_handle) {
-		std::cerr<<"Error fetching data -- connection is null\n";
-		return u"";
-	}
-	
-	std::u16string identifier = u"";
-	std::string statement_str;
-	if ("Uris" == table) {
-		statement_str = "select uriName from "+table+" WHERE idUri = "+std::to_string(id)+";";
-	}
-	else if ("Origins" == table) {
-		statement_str = "select originName from "+table+" WHERE idOrigin = "+std::to_string(id)+";";
-	}
-	else if ("Attributes" == table) {
-		statement_str = "select attributeName from "+table+" WHERE idAttribute = "+std::to_string(id)+";";
-	}
-	MYSQL_STMT* statement_p = mysql_stmt_init(db_handle);
-	if (nullptr == statement_p) {
-		//TODO This should be better at handling an error -- throw an exception
-		std::cerr<<"Error creating statement for current snapshot.\n";
-		return u"";
-	}
-	else {
-		if (mysql_stmt_prepare(statement_p, statement_str.c_str(), statement_str.size())) {
-			std::cerr<<"Failed to prepare statement: "<<statement_str<<": "<<mysql_error(db_handle)<<'\n';
-		}
-		else {
-			//Execute the statement
-			if (mysql_stmt_execute(statement_p)) {
-				std::cerr<<"SQL statement failed: "<<mysql_stmt_error(statement_p)<<'\n';
-				return u"";
-			}
+  if (nullptr == db_handle) {
+    std::cerr<<"Error fetching data -- connection is null\n";
+    return u"";
+  }
 
-			//Get the parameter count from the statement
-			int param_count = mysql_stmt_param_count(statement_p);
+  std::u16string identifier = u"";
+  std::string statement_str;
+  if ("Uris" == table) {
+    statement_str = "select uriName from "+table+" WHERE idUri = "+std::to_string(id)+";";
+  }
+  else if ("Origins" == table) {
+    statement_str = "select originName from "+table+" WHERE idOrigin = "+std::to_string(id)+";";
+  }
+  else if ("Attributes" == table) {
+    statement_str = "select attributeName from "+table+" WHERE idAttribute = "+std::to_string(id)+";";
+  }
+  MYSQL_STMT* statement_p = mysql_stmt_init(db_handle);
+  if (nullptr == statement_p) {
+    //TODO This should be better at handling an error -- throw an exception
+    std::cerr<<"Error creating statement for current snapshot.\n";
+    return u"";
+  }
+  else {
+    if (mysql_stmt_prepare(statement_p, statement_str.c_str(), statement_str.size())) {
+      std::cerr<<"Failed to prepare statement: "<<statement_str<<": "<<mysql_error(db_handle)<<'\n';
+    }
+    else {
+      //Execute the statement
+      if (mysql_stmt_execute(statement_p)) {
+        std::cerr<<"SQL statement failed: "<<mysql_stmt_error(statement_p)<<'\n';
+        return u"";
+      }
 
-			//Fetch result set meta information */
-			MYSQL_RES* prepare_meta_result = mysql_stmt_result_metadata(statement_p);
-			if (!prepare_meta_result) {
-				std::cerr<<"Error fetching meta-information to get world data: "<<mysql_stmt_error(statement_p)<<'\n';
-				return u"";
-			}
+      //Get the parameter count from the statement
+      int param_count = mysql_stmt_param_count(statement_p);
+      // TODO This seems to be unfinished
+      (void)param_count;
 
-			//Get total columns in the query
-			int column_count = mysql_num_fields(prepare_meta_result);
-			//Check for the expected number of columns
-			if (column_count != 1) {
-				std::cerr<<"Bad column count while fetching world data -- expected 2 got "<<column_count<<'\n';
-				//Failed, free the result data
-				mysql_stmt_free_result(statement_p);
+      //Fetch result set meta information */
+      MYSQL_RES* prepare_meta_result = mysql_stmt_result_metadata(statement_p);
+      if (!prepare_meta_result) {
+        std::cerr<<"Error fetching meta-information to get world data: "<<mysql_stmt_error(statement_p)<<'\n';
+        return u"";
+      }
 
-				//Free the prepared result metadata
-				mysql_free_result(prepare_meta_result);
+      //Get total columns in the query
+      int column_count = mysql_num_fields(prepare_meta_result);
+      //Check for the expected number of columns
+      if (column_count != 1) {
+        std::cerr<<"Bad column count while fetching world data -- expected 2 got "<<column_count<<'\n';
+        //Failed, free the result data
+        mysql_stmt_free_result(statement_p);
 
-				//Free the statement
-				mysql_stmt_close(statement_p);
-				return u"";
-			}
+        //Free the prepared result metadata
+        mysql_free_result(prepare_meta_result);
 
-			MYSQL_BIND bind[1];
-			my_bool error[1];
-			my_bool is_null[1];
+        //Free the statement
+        mysql_stmt_close(statement_p);
+        return u"";
+      }
 
-			memset(bind, 0, sizeof(bind));
-			//Expecting the string matching the ID
-			//Column 1: UTF16 string
-			unsigned long lengths[1];
-			std::string in_string(171, '\0');
-			bindSQL(bind, lengths, error, is_null, in_string);
+      MYSQL_BIND bind[1];
+      my_bool error[1];
+      my_bool is_null[1];
 
-			//Bind the result buffers
-			if (mysql_stmt_bind_result(statement_p, bind)) {
-				std::cerr<<"Error binding to result buffers while fetching world data: "<<mysql_stmt_error(statement_p)<<'\n';
-				//TODO FIXME Should throw an exception here
-				return u"";
-			}
+      memset(bind, 0, sizeof(bind));
+      //Expecting the string matching the ID
+      //Column 1: UTF16 string
+      unsigned long lengths[1];
+      std::string in_string(171, '\0');
+      bindSQL(bind, lengths, error, is_null, in_string);
 
-			//mysql_stmt_fetch() returns zero if a row was fetched successfully,
-			//MYSQL_NO_DATA if there are no more rows to fetch, and 1 if an error occurred.
-			//After a successful fetch, the column values are available in the MYSQL_BIND
-			//structures bound to the result.
-			int num_rows = 0;
-			while (0 == (mysql_stmt_fetch(statement_p))) {
-				++num_rows;
-				identifier = std::u16string(in_string.begin(), in_string.begin() + lengths[0]);
-			}
-			{
-				int status;
-				do {
-					status = mysql_next_result(db_handle);
-				} while (0 == status);
-				if (0 < status) {
-					std::cerr<<"Error fetching world data: "<<mysql_error(db_handle)<<"\n";
-				}
-			}
-			//mysql_stmt_fetch() to retrieve rows, and mysql_stmt_free_result() to free the result set.
-			mysql_stmt_free_result(statement_p);
+      //Bind the result buffers
+      if (mysql_stmt_bind_result(statement_p, bind)) {
+        std::cerr<<"Error binding to result buffers while fetching world data: "<<mysql_stmt_error(statement_p)<<'\n';
+        //TODO FIXME Should throw an exception here
+        return u"";
+      }
 
-			//Free the prepared result metadata
-			mysql_free_result(prepare_meta_result);
+      //mysql_stmt_fetch() returns zero if a row was fetched successfully,
+      //MYSQL_NO_DATA if there are no more rows to fetch, and 1 if an error occurred.
+      //After a successful fetch, the column values are available in the MYSQL_BIND
+      //structures bound to the result.
+      int num_rows = 0;
+      while (0 == (mysql_stmt_fetch(statement_p))) {
+        ++num_rows;
+        identifier = std::u16string(in_string.begin(), in_string.begin() + lengths[0]);
+      }
+      {
+        int status;
+        do {
+          status = mysql_next_result(db_handle);
+        } while (0 == status);
+        if (0 < status) {
+          std::cerr<<"Error fetching world data: "<<mysql_error(db_handle)<<"\n";
+        }
+      }
+      //mysql_stmt_fetch() to retrieve rows, and mysql_stmt_free_result() to free the result set.
+      mysql_stmt_free_result(statement_p);
 
-			//Free the statement
-			mysql_stmt_close(statement_p);
-		}
-	}
-	//Cache this result
-	idToIdentifier[id_table] = identifier;
-	//And return it
-	return identifier;
+      //Free the prepared result metadata
+      mysql_free_result(prepare_meta_result);
+
+      //Free the statement
+      mysql_stmt_close(statement_p);
+    }
+  }
+  //Cache this result
+  idToIdentifier[id_table] = identifier;
+  //And return it
+  return identifier;
 }
 
 //Fetches the world data from a mysql_stmt_execute command (call after mysql_stmt_execute)
@@ -1193,8 +1195,8 @@ WorldModel::world_state fetchIndexedWorldData(MYSQL_STMT* stmt, MYSQL* handle) {
   //can catch the exceptions and reset the database connection when errors occur
   WorldModel::world_state ws;
   //Expecting a set of these columns:
-	//idUri, idAttribute, idOrigin, data, createTimestamp as created,
-	//expireTimestamp as expires
+  //idUri, idAttribute, idOrigin, data, createTimestamp as created,
+  //expireTimestamp as expires
 
   if (nullptr == handle) {
     std::cerr<<"Error fetching data -- connection is null\n";
@@ -1209,6 +1211,8 @@ WorldModel::world_state fetchIndexedWorldData(MYSQL_STMT* stmt, MYSQL* handle) {
 
   //Get the parameter count from the statement
   int param_count = mysql_stmt_param_count(stmt);
+  // TODO This is unfinished, should throw an error
+  (void)param_count;
 
   //Fetch result set meta information */
   MYSQL_RES* prepare_meta_result = mysql_stmt_result_metadata(stmt);
@@ -1259,15 +1263,15 @@ WorldModel::world_state fetchIndexedWorldData(MYSQL_STMT* stmt, MYSQL* handle) {
     return ws;
   }
 
-	struct TempWorldData {
-		int64_t identifier_id;
-		int64_t attribute_id;
-		int64_t origin_id;
-		int64_t creation;
-		int64_t expiration;
-		std::vector<unsigned char> data;
-	};
-	std::vector<TempWorldData> temp_results;
+  struct TempWorldData {
+    int64_t identifier_id;
+    int64_t attribute_id;
+    int64_t origin_id;
+    int64_t creation;
+    int64_t expiration;
+    std::vector<unsigned char> data;
+  };
+  std::vector<TempWorldData> temp_results;
 
   //mysql_stmt_fetch() returns zero if a row was fetched successfully,
   //MYSQL_NO_DATA if there are no more rows to fetch, and 1 if an error occurred.
@@ -1279,18 +1283,18 @@ WorldModel::world_state fetchIndexedWorldData(MYSQL_STMT* stmt, MYSQL* handle) {
     //std::u16string uri(in_uri.begin(), in_uri.begin() + lengths[0]);
     //std::u16string attr(in_attr.begin(), in_attr.begin() + lengths[1]);
     //std::u16string origin(in_origin.begin(), in_origin.begin() + lengths[2]);
-		//Try to cache the conversion from Ids to strings from the different tables
-		//TODO FIXME HERE Cannot call more SQL statements in the middle of this one
-		//Need to call idToName after this
-		/*
-		std::u16string uri(idToName(in_uri_id, "Uris", handle));
-		std::u16string attr(idToName(in_attr_id, "Attributes", handle));
-		std::u16string origin(idToName(in_origin_id, "Origins", handle));
-    std::vector<unsigned char> data(in_data.begin(), in_data.begin() + lengths[3]);
-    ws[uri].push_back(world_model::Attribute{attr, creation, expiration, origin, data});
-		*/
-		temp_results.emplace_back(TempWorldData{in_uri_id, in_attr_id, in_origin_id,
-					creation, expiration, std::vector<unsigned char>(in_data.begin(), in_data.begin() + lengths[3])});
+    //Try to cache the conversion from Ids to strings from the different tables
+    //TODO FIXME HERE Cannot call more SQL statements in the middle of this one
+    //Need to call idToName after this
+    /*
+       std::u16string uri(idToName(in_uri_id, "Uris", handle));
+       std::u16string attr(idToName(in_attr_id, "Attributes", handle));
+       std::u16string origin(idToName(in_origin_id, "Origins", handle));
+       std::vector<unsigned char> data(in_data.begin(), in_data.begin() + lengths[3]);
+       ws[uri].push_back(world_model::Attribute{attr, creation, expiration, origin, data});
+       */
+    temp_results.emplace_back(TempWorldData{in_uri_id, in_attr_id, in_origin_id,
+        creation, expiration, std::vector<unsigned char>(in_data.begin(), in_data.begin() + lengths[3])});
   }
   {
     int status;
@@ -1312,14 +1316,14 @@ WorldModel::world_state fetchIndexedWorldData(MYSQL_STMT* stmt, MYSQL* handle) {
     std::cerr<<"Error closing mysql statement: "<<mysql_stmt_error(stmt)<<'\n';
   }
 
-	//Now convert the temporary data into full world model data by expanding
-	//the id numbers into their corresponding strings
-	for (TempWorldData& twd : temp_results) {
-		std::u16string uri(idToName(twd.identifier_id, "Uris", handle));
-		std::u16string attr(idToName(twd.attribute_id, "Attributes", handle));
-		std::u16string origin(idToName(twd.origin_id, "Origins", handle));
+  //Now convert the temporary data into full world model data by expanding
+  //the id numbers into their corresponding strings
+  for (TempWorldData& twd : temp_results) {
+    std::u16string uri(idToName(twd.identifier_id, "Uris", handle));
+    std::u16string attr(idToName(twd.attribute_id, "Attributes", handle));
+    std::u16string origin(idToName(twd.origin_id, "Origins", handle));
     ws[uri].emplace_back(world_model::Attribute{attr, twd.creation, twd.expiration, origin, twd.data});
-	}
+  }
 
   return ws;
 }
@@ -1346,6 +1350,8 @@ WorldModel::world_state MysqlWorldModel::fetchWorldData(MYSQL_STMT* stmt, MYSQL*
 
   //Get the parameter count from the statement
   int param_count = mysql_stmt_param_count(stmt);
+  // TODO This is unfinished, should throw an error
+  (void)param_count;
 
   //Validate parameter count
   //if (param_count != 6) {
@@ -1442,6 +1448,8 @@ WorldModel::world_state MysqlWorldModel::_historicSnapshot(const world_model::UR
                                     std::vector<std::u16string>& desired_attributes,
                                     world_model::grail_time start, world_model::grail_time stop,
                                     MYSQL* handle) {
+  // TODO The start time is not currently used so this is technically non-compliant
+  (void)start;
   //Return if nothing was requested
   if (desired_attributes.empty()) {
     return WorldModel::world_state();
@@ -1468,6 +1476,7 @@ WorldModel::world_state MysqlWorldModel::_historicSnapshot(const world_model::UR
     return WorldModel::world_state();
   }
   MYSQL_BIND parameters[4];
+  // TODO(only handling uint8 characters currently, should add support for other character sets
   std::string char8_uri(uri.begin(), uri.end());
   memset(parameters, 0, sizeof(parameters));
   parameters[0].buffer_type = MYSQL_TYPE_STRING;
@@ -1492,8 +1501,8 @@ WorldModel::world_state MysqlWorldModel::_historicSnapshot(const world_model::UR
   parameters[3].buffer = &(stop);
   WorldModel::world_state result;
 
-	//Assemble a different regex query depending upon having single or multiple attributes
-	if (1 == desired_attributes.size()) {
+  //Assemble a different regex query depending upon having single or multiple attributes
+  if (1 == desired_attributes.size()) {
     std::string char8_attr(desired_attributes[0].begin(), desired_attributes[0].end());
     parameters[1].buffer = (void*)char8_attr.data();
     attr_len = char8_attr.size();
@@ -1545,6 +1554,7 @@ WorldModel::world_state MysqlWorldModel::_historicSnapshot(const world_model::UR
 /**
  * Get the state of the world model after the data from the given time range.
  * Any number of read requests can be simultaneously serviced.
+ * TODO The start time is not currently used so this is technically non-compliant
  */
 WorldModel::world_state MysqlWorldModel::historicSnapshot(const world_model::URI& uri,
                                     std::vector<std::u16string> desired_attributes,
@@ -1559,17 +1569,17 @@ WorldModel::world_state MysqlWorldModel::historicSnapshot(const world_model::URI
 
 /*
 std::vector<std::vector<int>> _getURIAttributeOrigin(const world_model::URI& uri,
-																		const std::u16string& origin,
-                                    std::vector<std::u16string>& desired_attributes,
-																		MYSQL* handle) {
+                                const std::u16string& origin,
+                                std::vector<std::u16string>& desired_attributes,
+                                MYSQL* handle) {
   //Return if we cannot get a connection
   if (nullptr == handle) {
     std::cerr<<"Cannot call getURIAttributeOrigin -- connection is null\n";
     return WorldModel::world_state();
   }
-	//CREATE PROCEDURE getURIAttributeOrigin(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
-																	 //attribute VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
-																	 //origin VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
+  //CREATE PROCEDURE getURIAttributeOrigin(uri VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
+                                         //attribute VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci,
+                                         //origin VARCHAR(170) CHARACTER SET utf16 COLLATE utf16_unicode_ci)
   std::string statement_str = "CALL getURIAttributeOrigin(?, ?, ?);";
   MYSQL_STMT* statement_p = mysql_stmt_init(handle);
   if (nullptr == statement_p) {
@@ -1661,8 +1671,8 @@ WorldModel::world_state MysqlWorldModel::_historicDataInRange(const world_model:
   parameters[4].is_unsigned = false;
   parameters[4].buffer = &(stop);
   WorldModel::world_state result;
-	//Assemble a different regex query depending upon having single or multiple attributes
-	if (1 == desired_attributes.size()) {
+  //Assemble a different regex query depending upon having single or multiple attributes
+  if (1 == desired_attributes.size()) {
     std::string char8_attr(desired_attributes[0].begin(), desired_attributes[0].end());
     parameters[1].buffer = (void*)char8_attr.data();
     attr_len = char8_attr.size();
@@ -1706,14 +1716,14 @@ WorldModel::world_state MysqlWorldModel::_historicDataInRange(const world_model:
   //Delete the statement
   //mysql_stmt_close(statement_p);
 
-	//Sort the returned attributes
-	//TODO FIXME Is sorting here faster than in mysql?
-	auto sortAttrsByTime = [](const world_model::Attribute& a, const world_model::Attribute& b) {
-		return a.creation_date < b.creation_date;
-	};
-	for (std::pair<const world_model::URI, std::vector<world_model::Attribute>>& I : result) {
-		std::sort(I.second.begin(), I.second.end(), sortAttrsByTime);
-	}
+  //Sort the returned attributes
+  //TODO FIXME Is sorting here faster than in mysql?
+  auto sortAttrsByTime = [](const world_model::Attribute& a, const world_model::Attribute& b) {
+    return a.creation_date < b.creation_date;
+  };
+  for (std::pair<const world_model::URI, std::vector<world_model::Attribute>>& I : result) {
+    std::sort(I.second.begin(), I.second.end(), sortAttrsByTime);
+  }
 
   //Return all of the results
   return result;
